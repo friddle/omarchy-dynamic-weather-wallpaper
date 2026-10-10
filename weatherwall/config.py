@@ -14,16 +14,34 @@ DEFAULT_PROMPT = (
     "solar term {solarterm_name}, daytime segment {hours}. "
     "Preserve the original composition, main subject and color palette, "
     "naturally blending in the weather and seasonal atmosphere. "
+    "If the scene includes sky, render the appropriate sun, moon or stars "
+    "in a suitable position consistent with the weather and time of day. "
     "Photorealistic, rich details, no text or watermark."
 )
 
-# 旧版中文默认 Prompt(升级时自动替换为新的英文默认)
+# 基准图自动生成的内置默认描述(英文): 湖中小岛+木屋+深林高山+太阳
+DEFAULT_BASE_PROMPT = (
+    "A small island in the middle of a lake, with a wooden house on the island. "
+    "Deep forest and high mountains in the background, and the sun visible in the sky. "
+    "Standard wallpaper-grade quality."
+)
+
+# 旧版默认 Prompt(升级时自动替换为最新默认)
 LEGACY_PROMPT_ZH = (
     "以这张基准照片为基础创作一张精美的桌面壁纸：当前天气为{weather_cn}，"
     "气温约{temp}℃（{temp_min}~{temp_max}℃），节气为{solarterm_cn}，时段为{hours}。"
     "保持原图的构图、主体与色调风格，自然地融入上述天气、温度与季节氛围，"
     "画面真实自然、细节丰富，不要出现任何文字和水印。"
 )
+LEGACY_PROMPT_EN_V1 = (
+    "Based on this reference photo, create a stunning desktop wallpaper: "
+    "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
+    "solar term {solarterm_name}, daytime segment {hours}. "
+    "Preserve the original composition, main subject and color palette, "
+    "naturally blending in the weather and seasonal atmosphere. "
+    "Photorealistic, rich details, no text or watermark."
+)
+LEGACY_PROMPTS = (LEGACY_PROMPT_ZH, LEGACY_PROMPT_EN_V1)
 
 DEFAULT_CONFIG = {
     # auto: 初始化时探测(google 通->global, 不通->china)，可手动覆盖
@@ -156,8 +174,8 @@ def load_config() -> dict:
                     dst[k] = v
 
         merge(cfg, user)
-        # 升级迁移: 旧中文默认 Prompt 自动换成新的英文默认
-        if cfg["generator"].get("prompt") == LEGACY_PROMPT_ZH:
+        # 升级迁移: 旧版默认 Prompt 自动换成最新默认
+        if cfg["generator"].get("prompt") in LEGACY_PROMPTS:
             cfg["generator"]["prompt"] = DEFAULT_PROMPT
     return cfg
 

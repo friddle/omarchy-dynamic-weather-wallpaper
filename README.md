@@ -46,7 +46,7 @@ open http://127.0.0.1:8765
 | Tab | 内容 |
 |---|---|
 | Status | 运行状态 + 常用操作（立即刷新 / 强制重新生图 / 探测通道 / 测试天气）+ 日志 |
-| Base & AI | 上传/管理基准图（点击生效、右键删除）+ 生图配置（Base URL / Key / 模型 / Prompt） |
+| Base & AI | 上传/管理基准图（点击生效、右键删除）+ **自动生成基准图弹窗**（描述场景→文生图并生效）+ 生图配置（Base URL / Key / 模型 / Prompt） |
 | Advanced | 分步引导：① 网络通道+代理 ② 天气源+城市（选 QWeather/OpenWeatherMap 才显示 Key 输入框，附获取步骤）③ 目标显示器（多显示器勾选）④ 刷新与命名规则 ⑤ 显示语言 |
 | Gallery | **两层壁纸库**：上层按基准图分组切换，下层展示基于该基准图生成的壁纸，点击立即应用 |
 
@@ -121,6 +121,11 @@ python3 -m unittest discover -s tests  # 单元测试
 | `~/.cache/omarchy-dynamic-wallpaper/state.json` | 运行状态（含区域探测缓存） |
 
 配置见 `config.example.json`；Prompt 模板默认英文（可改中文），多语言占位符：`{weather_name}` `{weather_en}` `{weather_cn}` `{weather}` `{temp}` `{temp_min}` `{temp_max}` `{hours}` `{solarterm_name}` `{solarterm_en}` `{solarterm_cn}` `{solarterm}` `{city}`（`*_name` 跟随界面语言输出）。
+
+两个内置默认 Prompt（升级时旧默认自动迁移，自定义内容不受影响）：
+
+- **壁纸生图**：在原模板基础上增加了天空规则——"If the scene includes sky, render the appropriate sun, moon or stars in a suitable position consistent with the weather and time of day."
+- **基准图自动生成**（弹窗默认描述）："A small island in the middle of a lake, with a wooden house on the island. Deep forest and high mountains in the background, and the sun visible in the sky. Standard wallpaper-grade quality."（一座湖中小岛，岛上有木质房屋，背景深林高山，天空可见太阳，壁纸级质量）
 
 > API Key 只保存在本机配置文件中，设置后台仅绑定 127.0.0.1，请勿随意端口转发。
 

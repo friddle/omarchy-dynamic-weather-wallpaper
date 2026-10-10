@@ -125,7 +125,8 @@ def make_handler(app: App) -> type:
                     self._json(app.status())
                 elif url.path == "/api/config":
                     cfg = config.load_config()
-                    self._json({"ok": True, "config": cfg})
+                    self._json({"ok": True, "config": cfg,
+                                "default_base_prompt": config.DEFAULT_BASE_PROMPT})
                 elif url.path == "/api/wallpapers":
                     self._json({"ok": True, "groups": _grouped_wallpapers()})
                 elif url.path == "/api/displays":
@@ -273,6 +274,29 @@ def make_handler(app: App) -> type:
                     cfg["base_image"] = safe
                     config.save_config(cfg)
                     app.log(f"上传基准图: {safe} (已设为生效)")
+                    self._json({"ok": True, "name": safe, "stem": config.base_stem(cfg)})
+
+                elif url.path == "/api/base-image-generate":
+                    # 弹窗自动生成基准图(文生图, 需已配置 API Key)
+                    import datetime as _dt
+
+                    from . import generate as _gen
+                    prompt = str(body.get("prompt") or "").strip() or config.DEFAULT_BASE_PROMPT
+                    cfg = config.load_config()
+                    if not (cfg["generator"].get("api_key") or "").strip():
+                        return self._json({"ok": False,
+                                           "error": "尚未配置生图 API Key，请先在 Base & AI 标签页填写"}, 400)
+                    stem = re.sub(r"[^\w\-.]+", "_", str(body.get("name") or "").strip()) \
+                        or f"base_{_dt.datetime.now().strftime('%m%d_%H%M%S')}"
+                    data, ext = _gen.generate_image(
+                        cfg["generator"], prompt, None,
+                        proxy=str((cfg.get("network") or {}).get("proxy") or ""))
+                    safe = re.sub(r"[^\w\-. ]+", "_", stem) + "." + ext
+                    config.ensure_dirs()
+                    (config.base_images_dir() / safe).write_bytes(data)
+                    cfg["base_image"] = safe
+                    config.save_config(cfg)
+                    app.log(f"自动生成基准图: {safe} (已设为生效)")
                     self._json({"ok": True, "name": safe, "stem": config.base_stem(cfg)})
 
                 elif url.path == "/api/base-image-select":

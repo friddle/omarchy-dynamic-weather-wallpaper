@@ -153,15 +153,21 @@ class TestConfig(unittest.TestCase):
         from unittest import mock
         with tempfile.TemporaryDirectory() as td:
             f = Path(td) / "config.json"
-            f.write_text(json.dumps({"generator": {"prompt": config.LEGACY_PROMPT_ZH}}), encoding="utf-8")
-            with mock.patch("weatherwall.config.config_file", return_value=f):
-                cfg = config.load_config()
-            self.assertEqual(cfg["generator"]["prompt"], config.DEFAULT_PROMPT)
+            # 所有旧版默认 prompt 都迁移到最新默认
+            for legacy in config.LEGACY_PROMPTS:
+                f.write_text(json.dumps({"generator": {"prompt": legacy}}), encoding="utf-8")
+                with mock.patch("weatherwall.config.config_file", return_value=f):
+                    cfg = config.load_config()
+                self.assertEqual(cfg["generator"]["prompt"], config.DEFAULT_PROMPT)
+            # 新默认包含天空日月星描述
+            self.assertIn("sun, moon or stars", config.DEFAULT_PROMPT)
             # 已自定义的 prompt 不被覆盖
             f.write_text(json.dumps({"generator": {"prompt": "my own {temp}"}}), encoding="utf-8")
             with mock.patch("weatherwall.config.config_file", return_value=f):
                 cfg = config.load_config()
             self.assertEqual(cfg["generator"]["prompt"], "my own {temp}")
+            # 内置基准图默认描述
+            self.assertIn("wooden house", config.DEFAULT_BASE_PROMPT)
 
 
 class TestDisplayI18n(unittest.TestCase):
