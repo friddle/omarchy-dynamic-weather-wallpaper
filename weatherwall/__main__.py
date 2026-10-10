@@ -11,6 +11,7 @@
 import argparse
 import json
 import sys
+import time
 
 from . import config
 from .app import App
@@ -67,6 +68,46 @@ def cmd_serve(app: App, args) -> int:
     return 0
 
 
+def cmd_gui(app: App, args) -> int:
+    """GUI 模式: 后台起设置服务+调度, 前台弹原生 WebView 窗口展示设置页。"""
+    import socket
+    import threading
+
+    from . import server
+    from . import gui
+
+    cfg = config.load_config()
+    host = args.host or cfg["server"]["host"]
+    port = args.port or cfg["server"]["port"]
+    url = f"http://127.0.0.1:{port}"
+
+    def _port_open() -> bool:
+        with socket.socket() as s:
+            s.settimeout(1)
+            return s.connect_ex(("127.0.0.1", int(port))) == 0
+
+    if _port_open():
+        # 已有实例在提供服务: 直接弹窗连接, 不重复起服务
+        print(f"已有实例运行于 {url}，直接打开设置窗口")
+        gui.open_url(url)
+        return 0
+
+    def _serve():
+        try:
+            app.start_scheduler()
+            server.serve(app, host, port)
+        except OSError as e:
+            print(f"服务启动失败: {e}", file=sys.stderr)
+
+    threading.Thread(target=_serve, daemon=True, name="weatherwall-serve").start()
+    for _ in range(50):  # 等端口就绪(最多 ~10s)
+        if _port_open():
+            break
+        time.sleep(0.2)
+    gui.open_url(url)
+    return 0
+
+
 def cmd_daemon(app: App, args) -> int:
     app.start_scheduler()
     try:
@@ -108,6 +149,10 @@ def main() -> int:
 
     sub.add_parser("daemon", help="仅后台循环(无设置页)")
 
+    p_gui = sub.add_parser("gui", help="GUI 模式: 后台服务 + 弹窗展示设置页(双击应用默认)")
+    p_gui.add_argument("--host", help="默认读配置 server.host")
+    p_gui.add_argument("--port", type=int, help="默认读配置 server.port")
+
     p_serve = sub.add_parser("serve", help="设置后台 + 后台循环(推荐)")
     p_serve.add_argument("--host", help="默认读配置 server.host")
     p_serve.add_argument("--port", type=int, help="默认读配置 server.port")
@@ -123,6 +168,8 @@ def main() -> int:
     app = App()
     if args.cmd == "once":
         return cmd_once(app, args)
+    if args.cmd == "gui":
+        return cmd_gui(app, args)
     if args.cmd == "daemon":
         return cmd_daemon(app, args)
     if args.cmd == "serve":

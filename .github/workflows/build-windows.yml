@@ -18,8 +18,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install PyInstaller & pywebview
+        run: pip install pyinstaller pywebview
 
       - name: Run unit tests
         run: python -m unittest discover -s tests
@@ -31,18 +31,36 @@ jobs:
           --icon assets/icon.ico
           --add-data "weatherwall/web/index.html;weatherwall/web"
           --add-data "weatherwall/seed/island.png;weatherwall/seed"
+          --collect-all webview
+          --collect-all pythonnet
+          --collect-all clr_loader
           winmain.py
 
-      - name: Smoke test (run 5s and hit status API)
+      - name: Smoke test (headless serve mode)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\WeatherDynamic.exe" -ArgumentList "serve" -PassThru
+          Start-Sleep -Seconds 8
+          try {
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/status" -TimeoutSec 5
+            if ($r.version) { Write-Host "OK: serve mode, version $($r.version), platform $($r.platform)" }
+            else { Write-Error "status API unexpected"; exit 1 }
+          } finally { Stop-Process -Id $p.Id -Force }
+
+      - name: Smoke test (GUI mode default)
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "dist\WeatherDynamic.exe" -PassThru
-          Start-Sleep -Seconds 6
-          try {
-            $r = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/status" -TimeoutSec 5
-            if ($r.version) { Write-Host "OK: exe running, version $($r.version), platform $($r.platform)" }
-            else { Write-Error "status API unexpected"; exit 1 }
-          } finally { Stop-Process -Id $p.Id -Force }
+          $ok = $false
+          foreach ($i in 1..15) {
+            Start-Sleep -Seconds 2
+            try {
+              $r = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/status" -TimeoutSec 3
+              if ($r.version) { $ok = $true; break }
+            } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if ($ok) { Write-Host "OK: gui mode service up" } else { Write-Error "gui mode service not reachable"; exit 1 }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -60,7 +78,7 @@ jobs:
           body: |
             **WeatherDynamic Windows 测试版**
 
-            下载 WeatherDynamic.exe 直接运行（后台服务，无窗口），然后浏览器打开
-            http://127.0.0.1:8765 进行配置。
+            下载 WeatherDynamic.exe 双击运行：自动弹出设置窗口（内置 WebView2），
+            后台服务同时启动。关闭窗口即退出。
 
             注意：exe 未签名，Windows SmartScreen 可能拦截 —— 点击「更多信息 → 仍要运行」。

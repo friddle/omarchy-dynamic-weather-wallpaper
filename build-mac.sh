@@ -52,11 +52,12 @@ build() {
 
   cat > "$APP/Contents/MacOS/$APP_NAME" <<LAUNCHER
 #!/bin/bash
-# WeatherDynamic 启动器: 设置后台(127.0.0.1:8765) + 壁纸调度循环
+# WeatherDynamic 启动器: 双击=GUI(服务+设置窗口, 装有 pywebview 时原生窗口, 否则浏览器)
+# LaunchAgent 自启动请带 "serve" 参数(无界面)
 DIR="\$(cd "\$(dirname "\$0")/../Resources" && pwd)"
 cd "\$DIR"
 for PY in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
-  [ -x "\$PY" ] && exec "\$PY" -m weatherwall serve
+  [ -x "\$PY" ] && exec "\$PY" -m weatherwall gui
 done
 echo "python3 not found (tried homebrew/local/system)" >&2
 exit 1
@@ -121,6 +122,7 @@ install_agent() {
   <key>ProgramArguments</key>
   <array>
     <string>$INSTALL_APP/Contents/MacOS/$APP_NAME</string>
+    <string>serve</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
