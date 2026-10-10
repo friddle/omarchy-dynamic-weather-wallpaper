@@ -193,20 +193,20 @@ textarea{resize:vertical;min-height:96px}
     <div class="card">
       <div class="stephead"><div class="stepnum">1</div><div>
         <h2 data-i18n="net_title">Network Channel</h2>
-        <p class="desc" data-i18n="net_desc">Decides which weather API chain is used by default. Auto: probe google.com at startup — reachable → global, blocked → China.</p>
+        <p class="desc" data-i18n="net_desc">Determines the default weather services. With auto, connectivity is checked at startup: international services are used when reachable, otherwise China-direct services.</p>
       </div></div>
       <div class="grid">
         <div>
           <label data-i18n="net_region">Channel</label>
           <select id="cfg-region">
-            <option value="auto" data-i18n="net_auto">auto · detect (google reachable → global)</option>
+            <option value="auto" data-i18n="net_auto">auto · Detect automatically</option>
             <option value="china">china</option>
             <option value="global">global</option>
           </select>
         </div>
         <div>
-          <label data-i18n="net_proxy">HTTP Proxy (for global networks, e.g. http://10.10.32.8:7890)</label>
-          <input type="text" id="cfg-proxy" data-i18n-ph="net_proxy_ph" placeholder="empty = direct (system env proxy still applies)">
+          <label data-i18n="net_proxy">HTTP Proxy (optional)</label>
+          <input type="text" id="cfg-proxy" data-i18n-ph="net_proxy_ph" placeholder="e.g. http://host:port — leave empty for direct connection">
         </div>
       </div>
       <div class="row" style="margin-top:12px">
@@ -245,7 +245,7 @@ textarea{resize:vertical;min-height:96px}
         </div>
         <div id="wrap-city-text" class="hidden">
           <label data-i18n="w_city">City</label>
-          <input type="text" id="cfg-city-free" data-i18n-ph="w_city_ph" placeholder="e.g. Tokyo, Hangzhou">
+          <input type="text" id="cfg-city-free" data-i18n-ph="w_city_ph" placeholder="Enter a city name">
         </div>
         <div>
           <label>&nbsp;</label>
@@ -281,7 +281,7 @@ textarea{resize:vertical;min-height:96px}
     <div class="card">
       <div class="stephead"><div class="stepnum">3</div><div>
         <h2 data-i18n="disp_title">Target Displays</h2>
-        <p class="desc" data-i18n="disp_desc">Choose which displays the wallpaper applies to. On macOS each Space is listed under its display name — the current picture helps identify them.</p>
+        <p class="desc" data-i18n="disp_desc">Select which displays the wallpaper applies to.</p>
       </div></div>
       <div class="row" style="margin-bottom:12px">
         <button class="btn ghost small" id="btn-displays" data-i18n="disp_load">Refresh Display List</button>
@@ -296,7 +296,7 @@ textarea{resize:vertical;min-height:96px}
     <div class="card">
       <div class="stephead"><div class="stepnum">4</div><div>
         <h2 data-i18n="sch_title">Schedule &amp; Naming</h2>
-        <p class="desc" data-i18n="sch_desc">Filename pattern: base_weather_hours_temperature_solarterm.jpg — the lazy-load cache key. Same tags reuse the cached image; any tag change triggers one AI call.</p>
+        <p class="desc" data-i18n="sch_desc">Wallpaper filename pattern: base_weather_hours_temperature_solarterm.jpg. Generated results are cached and reused until any condition changes.</p>
       </div></div>
       <div class="grid">
         <div>
@@ -323,7 +323,7 @@ textarea{resize:vertical;min-height:96px}
     <div class="card">
       <div class="stephead"><div class="stepnum">5</div><div>
         <h2 data-i18n="lang_title">Language</h2>
-        <p class="desc" data-i18n="lang_desc">Interface language and {weather_name}/{solarterm_name} placeholder output.</p>
+        <p class="desc" data-i18n="lang_desc">Interface language, also used by the {weather_name} and {solarterm_name} prompt placeholders.</p>
       </div></div>
       <div class="grid">
         <div>
@@ -394,32 +394,32 @@ en:{
  genb_desc:"Describe the scene — AI creates a new base image (text-to-image) and sets it active. Requires the API key configured in AI section.",
  genb_prompt:"Scene description (prompt)",genb_name:"Filename (optional)",genb_name_ph:"e.g. island → island.jpg",
  genb_go:"Generate",cancel:"Cancel",
- genb_running:"Generating… usually 10-60s",genb_ok:"Base image generated and set active: ",
+ genb_running:"Generating, please wait…",genb_ok:"Base image generated and set active: ",
  ai_title:"AI Image Generation",ai_desc:"Any OpenAI-compatible images API. With a base image it calls images/edits (image-to-image); without one it calls images/generations.",
  ai_baseurl:"API Base URL (remote server)",ai_key:"API Key",ai_model:"Model",ai_size:"Size",ai_prompt:"Prompt Template",
  ai_ph:"Placeholders: {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} — English template recommended; Chinese works too.",
  ai_nofallback:"Without an API key the base image is used directly (fallback mode).",
- net_title:"Network Channel",net_desc:"Decides which weather API chain is used by default. Auto: probe google.com at startup — reachable → global, blocked → China.",
- net_region:"Channel",net_auto:"auto · detect (google reachable → global)",
- net_proxy:"HTTP Proxy (for global networks, e.g. http://10.10.32.8:7890)",net_proxy_ph:"empty = direct (system env proxy still applies)",
- w_title:"Weather Source & City",w_desc:"Default sources are free and keyless. QWeather / OpenWeatherMap require a free API key (fields appear only when selected).",
+ net_title:"Network Channel",net_desc:"Determines the default weather services. With auto, connectivity is checked at startup: international services are used when reachable, otherwise China-direct services.",
+ net_region:"Channel",net_auto:"auto · Detect automatically",
+ net_proxy:"HTTP Proxy (optional)",net_proxy_ph:"e.g. http://host:port — leave empty for direct connection",
+ w_title:"Weather Source & City",w_desc:"Built-in sources are free. QWeather and OpenWeatherMap require a free API key (shown only when selected).",
  w_provider:"Weather API",w_country:"Country",w_china:"China",w_us:"United States",w_other:"Other / custom",
- w_city:"City",w_city_ph:"e.g. Tokyo, Hangzhou",w_locate:"📍 Locate by IP",
+ w_city:"City",w_city_ph:"Enter a city name",w_locate:"📍 Locate by IP",
  w_apikey:"Weather API Key",w_apihost:"QWeather API Host (new accounts only)",
  w_lat:"Latitude (optional override)",w_lon:"Longitude (optional override)",
- sch_title:"Schedule & Naming",sch_desc:"Filename pattern: base_weather_hours_temperature_solarterm.jpg — the lazy-load cache key. Same tags reuse the cached image; any tag change triggers one AI call.",
+ sch_title:"Schedule & Naming",sch_desc:"Wallpaper filename pattern: base_weather_hours_temperature_solarterm.jpg. Generated results are cached and reused until any condition changes.",
  sch_refresh:"Refresh interval (minutes)",sch_temp:"Temperature tag",
  sch_band:"band · quantized range (e.g. 20-25)",sch_minmax:"minmax · daily min-max (e.g. 12-23)",
  sch_bucket:"Time bucket size (hours)",
- lang_title:"Language",lang_desc:"Interface language and {weather_name}/{solarterm_name} placeholder output.",lang_label:"Display language",
+ lang_title:"Language",lang_desc:"Interface language, also used by the {weather_name} and {solarterm_name} prompt placeholders.",lang_label:"Display language",
  gal_title:"Wallpaper Gallery",gal_desc:"Click an image to apply it instantly.",
- disp_title:"Target Displays",disp_desc:"Choose which displays the wallpaper applies to. On macOS each Space is listed under its display name — the current picture helps identify them.",
+ disp_title:"Target Displays",disp_desc:"Select which displays the wallpaper applies to.",
  disp_load:"Refresh Display List",disp_empty:"Click refresh to load displays",
  disp_all:"All displays",disp_count:" displays",disp_saved:"Display settings saved",
  save:"Save",
- t_saved:"Saved",t_gen_q:"Submitted in background (generation is slow), check status later",t_gen_ok:"Done",
+ t_saved:"Saved",t_gen_q:"Generating in the background — check the Status tab shortly",t_gen_ok:"Done",
  t_located:"Located: ",t_locate_fail:"Locate failed: ",t_no_base:"No base images yet — upload one first",
- t_no_walls:"No wallpapers yet — click Refresh Now",t_cache_hit:"cache hit",t_new:"new",t_confirm_force:"Delete the cached image for current tags and regenerate via AI?",
+ t_no_walls:"No wallpapers yet — click Refresh Now",t_cache_hit:"cache hit",t_new:"new",t_confirm_force:"Regenerate the current wallpaper via AI? The cached image will be replaced.",
  t_apply_ok:"Applied: ",t_detect_none:"network unreachable",
  kw_none:"none",kw_auto:"auto → ",kw_detected:"detected",kw_cached:"cache hit",kw_new:"generated",kw_err:"last error",
  key_howto_q:"Get a key: open <b>console.qweather.com</b> → sign up → Console → Projects → create project & credential → copy the Key. New accounts also get a dedicated <b>API Host</b> (abcxxx.re.qweatherapi.com) to fill in above. Free tier: 1000 calls/day.",
@@ -442,32 +442,32 @@ zh:{
  genb_desc:"描述场景，AI 通过文生图创建一张新基准图并设为生效。需要先在 AI 配置里填好 API Key。",
  genb_prompt:"场景描述 (prompt)",genb_name:"文件名 (可选)",genb_name_ph:"如 island → island.jpg",
  genb_go:"生成",cancel:"取消",
- genb_running:"生成中…通常需要 10-60 秒",genb_ok:"基准图已生成并生效：",
+ genb_running:"正在生成，请稍候…",genb_ok:"基准图已生成并生效：",
  ai_title:"AI 生图",ai_desc:"任意 OpenAI 兼容 images 接口。有基准图走 images/edits(图生图)，无基准图走 images/generations。",
  ai_baseurl:"API Base URL (远程服务器)",ai_key:"API Key",ai_model:"模型",ai_size:"尺寸",ai_prompt:"Prompt 模板",
  ai_ph:"占位符：{weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} —— 推荐英文模板，中文亦可。",
  ai_nofallback:"未配置 API Key 时直接使用基准图(降级模式)。",
- net_title:"网络通道",net_desc:"决定默认天气接口链路。auto：初始化探测 google.com —— 通→国外，不通→国内。",
- net_region:"通道",net_auto:"auto · 自动探测 (google 通→国外)",
- net_proxy:"HTTP 出口代理 (国外环境，如 http://10.10.32.8:7890)",net_proxy_ph:"留空直连(仍读系统环境变量)",
- w_title:"天气源与城市",w_desc:"默认源免费免 Key。和风天气 / OpenWeatherMap 需要免费 API Key（选中才显示输入框）。",
+ net_title:"网络通道",net_desc:"决定默认使用的天气服务。选择 auto 时，启动阶段会自动检测网络连通性：可访问国际网络时使用国外服务，否则使用国内服务。",
+ net_region:"通道",net_auto:"auto · 自动检测",
+ net_proxy:"HTTP 代理（可选）",net_proxy_ph:"例如 http://host:port，留空则直连",
+ w_title:"天气源与城市",w_desc:"内置天气源均免费；和风天气与 OpenWeatherMap 需要免费 API Key（选中后才显示填写框）。",
  w_provider:"天气接口",w_country:"国家",w_china:"中国",w_us:"美国",w_other:"其他 / 自定义",
- w_city:"城市",w_city_ph:"如 Tokyo、上海",w_locate:"📍 IP 自动定位",
+ w_city:"城市",w_city_ph:"输入城市名称",w_locate:"📍 IP 自动定位",
  w_apikey:"天气 API Key",w_apihost:"和风天气 API Host (仅新账号)",
  w_lat:"纬度 (可选，直接覆盖)",w_lon:"经度 (可选，直接覆盖)",
- sch_title:"刷新与命名",sch_desc:"文件名格式：基准图_天气_时段_温度_节气.jpg —— 懒加载缓存键。标签相同直接用缓存，任一变化才触发一次 AI 生图。",
+ sch_title:"刷新与命名",sch_desc:"壁纸文件名规则：基准图_天气_时段_温度_节气.jpg。生成结果会被缓存，条件不变时直接复用。",
  sch_refresh:"刷新间隔 (分钟)",sch_temp:"温度标签",
  sch_band:"band · 区间量化 (如 20-25)",sch_minmax:"minmax · 当日最低-最高 (如 12-23)",
  sch_bucket:"时段桶大小 (小时)",
- lang_title:"语言",lang_desc:"界面语言及 {weather_name}/{solarterm_name} 占位符输出。",lang_label:"显示语言",
+ lang_title:"语言",lang_desc:"界面语言，同时决定 {weather_name} 与 {solarterm_name} 占位符的输出语言。",lang_label:"显示语言",
  gal_title:"壁纸库",gal_desc:"点击图片立即应用。",
- disp_title:"目标显示器",disp_desc:"选择壁纸应用到哪些显示器。macOS 下按显示名列出各个桌面/空间，当前壁纸可帮助辨认。",
+ disp_title:"目标显示器",disp_desc:"选择壁纸应用的显示器。",
  disp_load:"刷新显示器列表",disp_empty:"点击刷新加载显示器",
  disp_all:"全部显示器",disp_count:" 块",disp_saved:"显示器设置已保存",
  save:"保存",
- t_saved:"已保存",t_gen_q:"已提交后台执行(生图较慢)，稍后查看状态",t_gen_ok:"完成",
+ t_saved:"已保存",t_gen_q:"正在后台生成，稍后可在状态页查看",t_gen_ok:"完成",
  t_located:"定位到：",t_locate_fail:"定位失败：",t_no_base:"还没有基准图，先上传一张",
- t_no_walls:"还没有壁纸，点「立即刷新」生成",t_cache_hit:"缓存命中",t_new:"新生成",t_confirm_force:"删除当前标签的缓存图并重新调用 AI 生成？",
+ t_no_walls:"还没有壁纸，点「立即刷新」生成",t_cache_hit:"缓存命中",t_new:"新生成",t_confirm_force:"确定重新生成当前壁纸？将调用 AI 并替换缓存图片。",
  t_apply_ok:"已应用：",t_detect_none:"网络不可用",
  kw_none:"无",kw_auto:"auto → ",kw_detected:"探测",kw_cached:"缓存命中",kw_new:"新生成",kw_err:"最近错误",
  key_howto_q:"获取 Key：打开 <b>console.qweather.com</b> → 注册登录 → 控制台「项目管理」创建项目并生成凭据 → 复制 Key；新账号会分配专属 <b>API Host</b>(abcxxx.re.qweatherapi.com)，填到上方输入框。免费订阅每天 1000 次。",
