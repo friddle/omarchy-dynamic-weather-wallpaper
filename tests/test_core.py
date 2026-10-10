@@ -105,6 +105,45 @@ class TestNaming(unittest.TestCase):
                 (root / "cfg" / "base_images" / "mine.jpg").write_bytes(b"x")
                 self.assertFalse(cfg_mod.seed_if_empty())
 
+    def test_base_image_self_heal(self):
+        """基准图自愈: 未配置/丢失时自动回退目录里最新一张。"""
+        from weatherwall import config as cfg_mod
+        from weatherwall.app import App
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bdir = root / "base_images"
+            bdir.mkdir()
+            (bdir / "a.png").write_bytes(b"1")
+            import time as _t
+            _t.sleep(0.02)
+            (bdir / "b.jpg").write_bytes(b"2")  # 更新的一张
+            app = App.__new__(App)  # 不跑完整 __init__
+            app.state = {"log": []}
+            app.log = lambda msg: None
+            cfg = cfg_mod.DEFAULT_CONFIG
+            with mock.patch.object(cfg_mod, "base_images_dir", return_value=bdir), \
+                 mock.patch.object(cfg_mod, "save_config", lambda c: None):
+                cfg["base_image"] = ""
+                cfg2, base_path = app._heal_base_image(cfg)
+                self.assertEqual(cfg2["base_image"], "b.jpg")
+                self.assertIsNotNone(base_path)
+                # 已配置且存在: 不动
+                cfg["base_image"] = "a.png"
+                cfg2, base_path = app._heal_base_image(cfg)
+                self.assertEqual(cfg2["base_image"], "a.png")
+                self.assertIsNotNone(base_path)
+                # 配置指向不存在的文件: 回退到最新
+                cfg["base_image"] = "gone.png"
+                cfg2, base_path = app._heal_base_image(cfg)
+                self.assertEqual(cfg2["base_image"], "b.jpg")
+                # 空目录: 不动
+                for f in bdir.iterdir():
+                    f.unlink()
+                cfg["base_image"] = ""
+                cfg2, base_path = app._heal_base_image(cfg)
+                self.assertEqual(cfg2["base_image"], "")
+                self.assertIsNone(base_path)
+
     def test_wallpaper_cache_migration(self):
         from weatherwall import config as cfg_mod
         with tempfile.TemporaryDirectory() as td:

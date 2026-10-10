@@ -15,6 +15,28 @@ from .weather import fetch_weather
 
 
 class App:
+    def _heal_base_image(self, cfg: dict) -> tuple[dict, Path | None]:
+        """基准图自愈: 未配置或文件丢失时, 自动回退到目录里最新一张。
+
+        避免因为配置被清空而退化成无基准图的纯文生图。
+        """
+        base_path = config.active_base_path(cfg)
+        if base_path is not None:
+            return cfg, base_path
+        avail = sorted(
+            (p for p in config.base_images_dir().glob("*")
+             if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS),
+            key=lambda p: p.stat().st_mtime, reverse=True)
+        if avail:
+            cfg["base_image"] = avail[0].name
+            try:
+                config.save_config(cfg)
+            except OSError:
+                pass
+            self.log(f"基准图自愈: 生效图缺失/未配置, 已自动选用 {avail[0].name}")
+            return cfg, avail[0]
+        return cfg, None
+
     def __init__(self) -> None:
         self._lock = threading.Lock()          # 防止后台循环与手动触发并发生图
         self._stop = threading.Event()
@@ -89,10 +111,10 @@ class App:
                 except OSError:
                     pass
 
-            # 3. 标签化命名
+            # 3. 标签化命名 + 基准图自愈(丢失/未配置时自动回退到最新一张, 避免退化成纯文生图)
+            cfg, base_path = self._heal_base_image(cfg)
             tags = naming.compose_tags(info, now, cfg["naming"])
             base_name = config.base_stem(cfg)
-            base_path = config.active_base_path(cfg)
             stem = naming.compose_stem(base_name, tags)
             self.log(f"标签: {tags['weather']} | {tags['hours']} | {tags['temp']} | "
                      f"{tags['solarterm']}({tags['solarterm_cn']}) -> {stem}")
