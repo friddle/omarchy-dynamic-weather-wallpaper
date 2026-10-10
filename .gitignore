@@ -4,3 +4,4 @@ __pycache__/
 *.log
 dist/
 assets/AppIcon.icns
+.playwright-mcp/
