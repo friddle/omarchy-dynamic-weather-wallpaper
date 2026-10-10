@@ -1,0 +1,37 @@
+{
+  "region": "auto",
+  "weather": {
+    "provider": "auto",
+    "city": "hangzhou",
+    "city_code": "",
+    "latitude": null,
+    "longitude": null,
+    "api_key": "",
+    "api_host": ""
+  },
+  "refresh_minutes": 30,
+  "network": {
+    "proxy": ""
+  },
+  "naming": {
+    "temp_mode": "band",
+    "temp_band": 5,
+    "time_bucket_hours": 4
+  },
+  "generator": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "",
+    "model": "gpt-image-1",
+    "size": "auto",
+    "prompt": "以这张基准照片为基础创作一张精美的桌面壁纸：当前天气为{weather_cn}，气温约{temp}℃（{temp_min}~{temp_max}℃），节气为{solarterm_cn}，时段为{hours}。保持原图的构图、主体与色调风格，自然地融入上述天气、温度与季节氛围，画面真实自然、细节丰富，不要出现任何文字和水印。",
+    "timeout_seconds": 300
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "wallpaper": {
+    "apply": true
+  },
+  "base_image": ""
+}

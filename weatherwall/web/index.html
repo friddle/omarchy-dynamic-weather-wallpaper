@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>动态天气壁纸 · 设置</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0f1117;--panel:#171a23;--panel2:#1e222e;--line:#2a2f3d;
+  --text:#e8eaf0;--muted:#8b93a7;--accent:#5b8cff;--accent2:#7c5bff;
+  --ok:#3ecf8e;--warn:#f5b14c;--err:#ff6b6b;--radius:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(160deg,var(--bg),#131722 60%,#10131c);
+  color:var(--text);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+.wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
+.sub{color:var(--muted);margin:0 0 22px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+.card h2 .tag{font-size:11px;color:var(--muted);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  border-radius:8px;padding:8px 10px;font:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:88px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:0;
+  border-radius:8px;padding:8px 16px;font:inherit;cursor:pointer;transition:.15s}
+.btn:hover{filter:brightness(1.12)}
+.btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--text)}
+.btn.small{padding:4px 10px;font-size:12px}
+.btn.danger{background:transparent;border:1px solid var(--err);color:var(--err)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--muted);flex-shrink:0}
+.kv .v{text-align:right;word-break:break-all}
+.badge{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.err{color:var(--err);border-color:var(--err)}
+.badge.warn{color:var(--warn);border-color:var(--warn)}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+  background:#20242f;border:1px solid var(--line);color:var(--text);padding:10px 20px;
+  border-radius:10px;transition:.25s;opacity:0;z-index:9;max-width:86vw}
+#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+#toast.err{border-color:var(--err)}
+.preview-name{font-family:ui-monospace,Menlo,monospace;background:var(--panel2);border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;word-break:break-all;font-size:13px}
+.base-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.base-item{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2);position:relative}
+.base-item img{width:100%;height:90px;object-fit:cover;display:block;cursor:pointer}
+.base-item .nm{font-size:11px;padding:5px 8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.base-item.active{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
+.base-item .mark{position:absolute;top:6px;left:6px;background:var(--ok);color:#04150c;font-size:10px;
+  padding:1px 7px;border-radius:10px;font-weight:600}
+.wall-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.wall-item{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2)}
+.wall-item img{width:100%;height:100px;object-fit:cover;display:block;cursor:pointer}
+.wall-item .nm{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;padding:5px 8px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logbox{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  max-height:220px;overflow:auto;font:11.5px/1.7 ui-monospace,Menlo,monospace;color:#9fa8bd;white-space:pre-wrap}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.hint code{background:var(--panel2);padding:1px 6px;border-radius:5px}
+.footer{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
+.dropzone{border:1.5px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--muted);
+  cursor:pointer;transition:.15s}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="dot"></span>动态天气壁纸 <span style="font-size:12px;color:var(--muted);font-weight:400" id="ver"></span></h1>
+  <p class="sub">温度 + 时间 + 天气 → 基准图 AI 生成 → 自动切换 · 懒加载缓存 · 国内/国外双通道</p>
+
+  <!-- 状态 -->
+  <div class="card">
+    <h2>运行状态 <span class="tag" id="last-run"></span></h2>
+    <div class="kv"><span class="k">平台 / 版本</span><span class="v" id="st-platform"></span></div>
+    <div class="kv"><span class="k">当前通道</span><span class="v" id="st-region"></span></div>
+    <div class="kv"><span class="k">天气</span><span class="v" id="st-weather"></span></div>
+    <div class="kv"><span class="k">标签 (天气/时段/温度/节气)</span><span class="v" id="st-tags"></span></div>
+    <div class="kv"><span class="k">目标文件</span><span class="v" id="st-file" style="font-family:ui-monospace,monospace"></span></div>
+    <div class="kv"><span class="k">基准图 / API Key</span><span class="v" id="st-misc"></span></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btn-refresh">立即刷新一轮</button>
+      <button class="btn ghost" id="btn-force">强制重新生图</button>
+      <button class="btn ghost" id="btn-detect">重新探测通道</button>
+      <button class="btn ghost" id="btn-test">测试天气+预览</button>
+    </div>
+    <div style="margin-top:10px" id="test-result"></div>
+    <div class="logbox" id="log" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 基本设置 -->
+  <div class="card">
+    <h2>基本设置</h2>
+    <div class="grid">
+      <div>
+        <label>网络通道</label>
+        <select id="cfg-region">
+          <option value="auto">auto · 自动探测 (google 通→国外)</option>
+          <option value="china">china · 国内</option>
+          <option value="global">global · 国外</option>
+        </select>
+      </div>
+      <div>
+        <label>天气接口</label>
+        <select id="cfg-provider">
+          <option value="auto">auto · 按通道 (国内 itboy / 国外 open-meteo)</option>
+          <option value="itboy">itboy · 国内免费免key</option>
+          <option value="open-meteo">open-meteo · 国外免费免key</option>
+          <option value="qweather">和风天气 QWeather · 国内，需免费Key</option>
+          <option value="openweathermap">OpenWeatherMap · 国外，需免费Key</option>
+        </select>
+        <div class="hint">选 <b>和风天气</b> 或 <b>OpenWeatherMap</b> 时需填下方 API Key</div>
+      </div>
+      <div>
+        <label>城市 (中文/拼音，如 hangzhou、上海)</label>
+        <input type="text" id="cfg-city" placeholder="hangzhou">
+      </div>
+      <div>
+        <label>天气 API Key (可选，仅 QWeather / OpenWeatherMap 需要)</label>
+        <input type="password" id="cfg-weather-key" placeholder="选这两个源时才需要" autocomplete="off">
+        <div class="hint" id="key-howto"></div>
+      </div>
+      <div>
+        <label>和风天气 API Host (可选，新账号专属 Host)</label>
+        <input type="text" id="cfg-weather-host" placeholder="如 abc123.re.qweatherapi.com，留空用 devapi">
+      </div>
+      <div>
+        <label>itboy 城市码 (可选，9位数字，优先于城市名)</label>
+        <input type="text" id="cfg-city-code" placeholder="留空自动按城市名解析">
+      </div>
+      <div>
+        <label>刷新间隔 (分钟)</label>
+        <input type="number" id="cfg-refresh" min="1" max="1440">
+      </div>
+      <div>
+        <label>HTTP 出口代理 (国外环境用，如 http://10.10.32.8:7890)</label>
+        <input type="text" id="cfg-proxy" placeholder="留空直连(仍读系统环境变量)">
+      </div>
+      <div>
+        <label>温度标签模式</label>
+        <select id="cfg-temp-mode">
+          <option value="band">band · 区间量化 (如 20-25，缓存少)</option>
+          <option value="minmax">minmax · 当日最低-最高 (如 12-23)</option>
+        </select>
+      </div>
+      <div>
+        <label>时段桶大小 (小时)</label>
+        <input type="number" id="cfg-bucket" min="1" max="24">
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btn-save-basic">保存设置</button>
+      <span class="hint">文件名格式：<code>基准图_天气_时段_温度_节气.jpg</code></span>
+    </div>
+  </div>
+
+  <!-- 基准图 -->
+  <div class="card">
+    <h2>基准图 <span class="tag">AI 生图的底图，上传后立即生效</span></h2>
+    <div class="dropzone" id="drop">点击或拖拽图片到此处上传 (jpg / png / webp，≤30MB)</div>
+    <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp" hidden>
+    <div class="base-list" id="base-list" style="margin-top:14px"></div>
+    <div class="hint">文件名将作为生成壁纸名的前缀，如 <code>westlake.jpg → westlake_rain_1216_20-25_springbegin.jpg</code></div>
+  </div>
+
+  <!-- AI 生图 -->
+  <div class="card">
+    <h2>AI 生图 <span class="tag">OpenAI 兼容 images API</span></h2>
+    <div class="grid">
+      <div>
+        <label>API Base URL (远程服务器地址)</label>
+        <input type="text" id="gen-base-url" placeholder="https://api.openai.com/v1">
+      </div>
+      <div>
+        <label>API Key</label>
+        <input type="password" id="gen-key" placeholder="sk-..." autocomplete="off">
+      </div>
+      <div>
+        <label>模型</label>
+        <input type="text" id="gen-model" placeholder="gpt-image-1">
+      </div>
+      <div>
+        <label>尺寸</label>
+        <select id="gen-size">
+          <option value="auto">auto</option>
+          <option>1024x1024</option>
+          <option>1536x1024</option>
+          <option>1024x1536</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Prompt 模板 (占位符见下方说明)</label>
+        <textarea id="gen-prompt"></textarea>
+        <div class="hint">占位符：<code>{weather_cn}</code> <code>{weather}</code> <code>{temp}</code> <code>{temp_min}</code>
+          <code>{temp_max}</code> <code>{hours}</code> <code>{solarterm_cn}</code> <code>{solarterm}</code> <code>{city}</code></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btn-save-gen">保存 AI 配置</button>
+      <span class="hint">有基准图时走 <code>images/edits</code> (图生图)；未配 Key 则直接使用基准图</span>
+    </div>
+  </div>
+
+  <!-- 壁纸库 -->
+  <div class="card">
+    <h2>壁纸库 <span class="tag">懒加载生成的缓存，点击图片直接应用</span></h2>
+    <div class="wall-list" id="wall-list"></div>
+  </div>
+
+  <div class="footer">omarchy-dynamic-weather-wallpaper · macOS / Windows / Linux(Omarchy) · 仅 Python 标准库</div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='show'+(err?' err':'');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.className='',3200);}
+async function api(path,body){
+  const opt=body!==undefined?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};
+  const r=await fetch(path,opt);const j=await r.json().catch(()=>({ok:false,error:'响应解析失败'}));
+  if(!j.ok&&j.error)throw new Error(j.error);return j;}
+
+let CFG=null;
+function collectBasic(){
+  return{region:$('cfg-region').value,refresh_minutes:+$('cfg-refresh').value||30,
+    network:{proxy:$('cfg-proxy').value.trim()},
+    weather:{provider:$('cfg-provider').value,city:$('cfg-city').value.trim()||'hangzhou',
+             city_code:$('cfg-city-code').value.trim(),
+             api_key:$('cfg-weather-key').value.trim(),
+             api_host:$('cfg-weather-host').value.trim()},
+    naming:{temp_mode:$('cfg-temp-mode').value,temp_band:5,time_bucket_hours:+$('cfg-bucket').value||4}};
+}
+function collectGen(){
+  return{generator:{base_url:$('gen-base-url').value.trim()||'https://api.openai.com/v1',
+    api_key:$('gen-key').value.trim(),model:$('gen-model').value.trim()||'gpt-image-1',
+    size:$('gen-size').value,prompt:$('gen-prompt').value}};
+}
+function fillForm(cfg){
+  CFG=cfg;
+  $('cfg-region').value=cfg.region||'auto';
+  $('cfg-provider').value=cfg.weather?.provider||'auto';
+  $('cfg-city').value=cfg.weather?.city||'';
+  $('cfg-city-code').value=cfg.weather?.city_code||'';
+  $('cfg-weather-key').value=cfg.weather?.api_key||'';
+  $('cfg-weather-key').placeholder=cfg.weather?.api_key?'已配置(点击可修改)':'选 QWeather/OpenWeatherMap 时才需要';
+  $('cfg-weather-host').value=cfg.weather?.api_host||'';
+  $('cfg-refresh').value=cfg.refresh_minutes||30;
+  $('cfg-proxy').value=cfg.network?.proxy||'';
+  $('cfg-temp-mode').value=cfg.naming?.temp_mode||'band';
+  $('cfg-bucket').value=cfg.naming?.time_bucket_hours||4;
+  $('gen-base-url').value=cfg.generator?.base_url||'';
+  $('gen-key').value=cfg.generator?.api_key||'';
+  $('gen-key').placeholder=cfg.generator?.api_key?'已配置(点击可修改)':'sk-...';
+  $('gen-model').value=cfg.generator?.model||'gpt-image-1';
+  $('gen-size').value=cfg.generator?.size||'auto';
+  $('gen-prompt').value=cfg.generator?.prompt||'';
+  updateKeyHowto();
+}
+function updateKeyHowto(){
+  const p=$('cfg-provider').value;
+  const tips={
+    qweather:'获取Key: 打开 <b>console.qweather.com</b> → 注册/登录 → 「控制台-项目管理」创建项目 → 生成凭据复制 Key；新版账号同时会分配专属 <b>API Host</b>(abcxxx.re.qweatherapi.com)，填到下方 API Host 输入框。免费订阅每天 1000 次。',
+    openweathermap:'获取Key: 打开 <b>home.openweathermap.org</b> → 注册 → 「API keys」页直接复制 Key，约 10 分钟后生效。免费档 60 次/分钟。',
+    auto:'当前选择免Key源，无需填写。',
+    itboy:'当前选择免Key源，无需填写。',
+    'open-meteo':'当前选择免Key源，无需填写。'
+  };
+  $('key-howto').innerHTML=tips[p]||tips.auto;
+}
+$('cfg-provider').addEventListener('change',updateKeyHowto);
+
+async function loadStatus(){
+  try{
+    const st=await api('/api/status');
+    $('ver').textContent='v'+st.version+' · '+st.platform;
+    $('last-run').textContent=st.state.last_run?('上次执行 '+st.state.last_run):'尚未执行';
+    const regionTxt=(st.region_setting==='auto'? 'auto → '+(st.region_detected||'未探测') : st.region_setting)
+      +(st.proxy?' · 代理 '+st.proxy:'');
+    $('st-region').innerHTML='<span class="badge">'+esc(regionTxt)+'</span>';
+    const w=st.state.last_weather;
+    $('st-weather').innerHTML=w?esc(`${w.city} · ${w.desc} · ${w.temp_current}℃ (${w.temp_min}~${w.temp_max}℃) · 源:${w.provider}`)
+      :'<span class="badge warn">暂无</span>';
+    const t=st.state.last_tags;
+    $('st-tags').innerHTML=t?esc(`${t.weather_cn} / ${t.hours} / ${t.temp}℃ / ${t.solarterm_cn}`):'-';
+    $('st-file').innerHTML=st.state.last_stem
+      ?`<span class="preview-name">${esc(st.state.last_stem)}.${esc((st.state.last_target||'.jpg').split('.').pop())}</span>
+        ${st.state.last_cached?' <span class="badge ok">缓存命中</span>':' <span class="badge warn">新生成</span>'}`
+      :'-';
+    $('st-misc').innerHTML=(st.base_image_exists?`<span class="badge ok">基准图 ${esc(st.base_image)}</span>`:'<span class="badge warn">未配置基准图</span>')
+      +' '+(st.has_api_key?'<span class="badge ok">API Key 已配置</span>':'<span class="badge warn">无 API Key(降级直用基准图)</span>');
+    if(st.state.last_error)$('st-weather').innerHTML+=' <span class="badge err">最近错误</span>';
+    $('log').textContent=(st.log||[]).join('\n');
+    const lb=document.getElementById('log');lb.scrollTop=lb.scrollHeight;
+  }catch(e){toast('状态加载失败: '+e.message,true)}
+}
+
+async function loadBases(){
+  const r=await api('/api/base-images');
+  const el=$('base-list');
+  el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">还没有基准图，先上传一张</div>';
+  for(const it of r.items){
+    const active=it.name===r.active;
+    const d=document.createElement('div');
+    d.className='base-item'+(active?' active':'');
+    d.innerHTML=`${active?'<span class="mark">生效中</span>':''}
+      <img src="/api/base-image-file?name=${encodeURIComponent(it.name)}" title="点击设为生效">
+      <div class="nm">${esc(it.name)}</div>`;
+    d.querySelector('img').onclick=()=>selectBase(it.name);
+    d.oncontextmenu=e=>{e.preventDefault();if(confirm('删除基准图 '+it.name+' ?'))delBase(it.name);};
+    el.appendChild(d);
+  }
+}
+async function selectBase(name){try{await api('/api/base-image-select',{name});toast('已设为生效: '+name);loadBases();loadStatus();}catch(e){toast(e.message,true)}}
+async function delBase(name){try{await api('/api/base-image-delete',{name});toast('已删除');loadBases();loadStatus();}catch(e){toast(e.message,true)}}
+
+async function loadWalls(){
+  const r=await api('/api/wallpapers');
+  const el=$('wall-list');
+  el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">还没有生成壁纸，点上方「立即刷新一轮」</div>';
+  for(const it of r.items.slice(0,60)){
+    const d=document.createElement('div');
+    d.className='wall-item';
+    d.innerHTML=`<img src="/api/wallpaper-file?name=${encodeURIComponent(it.name)}" title="点击应用为壁纸">
+      <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>`;
+    d.querySelector('img').onclick=async()=>{try{await api('/api/apply',{file:it.name});toast('已应用: '+it.name)}catch(e){toast(e.message,true)}};
+    el.appendChild(d);
+  }
+}
+
+async function uploadBase(file){
+  if(!file)return;
+  if(file.size>30*1024*1024)return toast('文件超过 30MB',true);
+  const buf=await file.arrayBuffer();
+  let bin='';const bytes=new Uint8Array(buf);const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  try{
+    const r=await api('/api/base-image',{name:file.name,data_b64:btoa(bin)});
+    toast(`上传成功: ${r.name} (前缀 ${r.stem})`);
+    loadBases();loadStatus();
+  }catch(e){toast('上传失败: '+e.message,true)}
+}
+
+$('btn-save-basic').onclick=async()=>{try{await api('/api/config',{config:collectBasic()});toast('设置已保存');loadStatus();}catch(e){toast(e.message,true)}};
+$('btn-save-gen').onclick=async()=>{try{await api('/api/config',{config:collectGen()});toast('AI 配置已保存');loadStatus();}catch(e){toast(e.message,true)}};
+$('btn-detect').onclick=async()=>{try{const r=await api('/api/detect-region',{});toast('探测结果: '+(r.region||'网络不可用'));loadStatus();}catch(e){toast(e.message,true)}};
+$('btn-refresh').onclick=async()=>{try{const r=await api('/api/refresh',{apply:true});
+  toast(r.queued?'已提交后台执行，稍后刷新状态查看':(r.ok?'执行成功，文件已就绪':'执行失败: '+(r.error||'')));!r.queued&&loadStatus();loadWalls();}catch(e){toast(e.message,true)}};
+$('btn-force').onclick=async()=>{if(!confirm('将删除当前标签对应的缓存图并重新调用 AI 生成，继续?'))return;
+  try{const r=await api('/api/force-generate',{apply:true});
+  toast(r.queued?'已提交后台生成(约1-2分钟)，稍后查看':'完成');loadStatus();loadWalls();}catch(e){toast(e.message,true)}};
+$('btn-test').onclick=async()=>{try{const r=await api('/api/test-weather',{force:false});
+  $('test-result').innerHTML=`<div class="kv"><span class="k">天气</span><span class="v">${esc(r.weather.city)} · ${esc(r.weather.desc)} · ${r.weather.temp_current}℃</span></div>
+  <div class="kv"><span class="k">将使用的文件</span><span class="v"><span class="preview-name">${esc(r.stem)}.jpg</span> ${r.cached?'<span class="badge ok">缓存命中(不生图)</span>':'<span class="badge warn">缓存未命中(将调用生图)</span>'}</span></div>
+  <div class="kv"><span class="k">Prompt</span><span class="v" style="font-size:12px;color:var(--muted)">${esc(r.prompt)}</span></div>`;
+  }catch(e){toast('测试失败: '+e.message,true)}};
+
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=e=>{uploadBase(e.target.files[0]);e.target.value='';};
+$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('drag')};
+$('drop').ondragleave=()=>$('drop').classList.remove('drag');
+$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('drag');uploadBase(e.dataTransfer.files[0])};
+
+(async function init(){
+  try{const r=await api('/api/config');fillForm(r.config);}catch(e){toast('配置加载失败: '+e.message,true)}
+  loadStatus();loadBases();loadWalls();
+  setInterval(loadStatus,15000);
+})();
+</script>
+</body>
+</html>

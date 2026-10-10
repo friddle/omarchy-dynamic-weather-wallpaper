@@ -1,0 +1,121 @@
+# omarchy-dynamic-weather-wallpaper
+
+动态天气壁纸：**读温度 + 时间 + 天气 → 基准图 + AI 生成 → 系统自动切换**。
+
+为 Omarchy (Arch + Hyprland) 而生，同时兼容 **macOS**（当前主力支持）与 **Windows**（基础支持）。仅依赖 Python 3 标准库，无任何 pip 依赖。
+
+## 主流程
+
+```
+初始化: wget google.com 思路的网络探测 ──通──> 国外通道 (open-meteo 免key天气)
+                        └──不通──> 国内通道 (itboy 免key天气, 失败自动回落 open-meteo)
+              ┌────────────────────────────────────────────────┐
+每轮循环:    读天气 → 天气tag化 + 温度范围化 + 时段分桶 + 节气 → 组合文件名
+              │      westlake_rain_1216_20-25_springbegin.jpg
+              ├─ 缓存已有(懒加载) ──> 直接使用
+              └─ 缓存没有 ──> 基准图 + prompt 调 OpenAI 兼容生图接口(images/edits)
+                                     └──> 保存到壁纸库 → 自动切换系统壁纸
+```
+
+## 快速开始 (macOS)
+
+```bash
+./run.sh init          # 探测国内/国外通道，生成默认配置
+./run.sh serve         # 启动设置后台 + 自动循环
+open http://127.0.0.1:8765
+```
+
+在设置后台上传一张**基准图**（如 `westlake.jpg`），填好生图 API 后点「立即刷新一轮」即可看到效果。
+
+自启动安装/卸载：
+
+```bash
+./install.sh mac       # 安装 LaunchAgent 并启动
+./install.sh remove    # 卸载
+```
+
+## 设置后台 (http://127.0.0.1:8765)
+
+| 功能 | 说明 |
+|---|---|
+| 上传基准图 | AI 生图的底图，文件名即生成壁纸名前缀，支持多张、点击切换生效 |
+| 配置中国/国外 | `auto`（初始化自动探测）/ `china` / `global`，随时可改 |
+| 配置城市 | 中文或拼音（hangzhou / 上海），itboy 也支持直接填 9 位城市码 |
+| 配置刷新时间 | 分钟级，改完下轮生效 |
+| 生图配置 | 远程服务器地址 (Base URL) + OpenAI Key + 模型 + Prompt 模板 |
+| HTTP 代理 | 国外环境可配 `http://10.10.32.8:7890`，所有出站请求走代理 |
+| 壁纸库 | 已生成壁纸网格，点击立即应用；右键删除基准图 |
+
+## 文件命名规则（懒加载缓存键）
+
+```
+{基准图}_{天气}_{时段}_{温度}_{节气}.jpg
+westlake_rain_1216_20-25_springbegin.jpg
+```
+
+| 标签 | 说明 | 示例 |
+|---|---|---|
+| 天气 tag | sunny / cloudy / overcast / rain / heavyrain / snow / thundershower / fog / haze / drizzle / partlycloudy / wind | `rain` |
+| 时段 | 默认 4 小时一桶，起止小时拼 4 位（可配 `time_bucket_hours`） | `1216` |
+| 温度 | `band` 模式：当前温度按 5℃ 区间量化；`minmax` 模式：当日最低-最高 | `20-25` / `12-23` |
+| 节气 | 二十四节气英文标签，内置寿星公式计算 | `springbegin`(立春) / `colddew`(寒露) |
+
+同样的标签组合只生成一次，命中缓存零成本切换——天气/时段/温度/节气任一变化才会触发新的 AI 生图。
+
+## 天气源
+
+| 源 | 通道 | Key | 说明 |
+|---|---|---|---|
+| itboy | 国内 | 免 key | 中国气象局数据（个人维护，走 http），失败自动回落 open-meteo |
+| open-meteo | 国外 | 免 key | 含 geocoding，国内多数网络也可直连 |
+| 和风天气 QWeather | 国内 | 免费申请 | 数据更稳，见下方获取步骤 |
+| OpenWeatherMap | 国外 | 免费申请 | 见下方获取步骤 |
+
+默认 `auto`：国内通道用 itboy、国外通道用 open-meteo，都无需 Key。需要 Key 的源获取方式：
+
+- **和风天气**：打开 [console.qweather.com](https://console.qweather.com) → 注册登录 → 控制台「项目管理」创建项目并生成凭据 → 复制 Key 填入设置页；新版账号会同时分配专属 **API Host**（形如 `abcxxx.re.qweatherapi.com`），一并填入「和风天气 API Host」输入框。免费订阅每日 1000 次。
+- **OpenWeatherMap**：打开 [home.openweathermap.org](https://home.openweathermap.org) → 注册 → 「API keys」页直接复制 Key（约 10 分钟生效）。免费档 60 次/分钟。
+
+生图接口为 OpenAI 兼容 `images/edits`（有基准图时）与 `images/generations`（无基准图时），`base_url` 可指向任意兼容服务（官方、中转站、自建网关均可）。未配置 API Key 时自动降级：直接以基准图本身作为壁纸，主流程依旧跑通。
+
+## 平台支持
+
+| 平台 | 壁纸切换方式 | 状态 |
+|---|---|---|
+| macOS | `osascript` 设置所有桌面空间（System Events → Finder 回落） | ✅ 主力支持 |
+| Omarchy / Linux | `swww` → `hyprpaper(hyprctl)` → `gsettings` → `feh` 自动探测 | ✅（Linux 侧标准工具链） |
+| Windows | PowerShell `SystemParametersInfo` | ⚠️ 基础支持，未实测 |
+
+Linux/Omarchy 安装：`./install.sh linux`（systemd 用户服务，无 systemd 时提示 Hyprland `exec-once` 写法）。
+
+## 常用命令
+
+```bash
+./run.sh init                          # 初始化+探测
+./run.sh serve                         # 设置后台+循环(推荐)
+./run.sh daemon                        # 仅循环(无后台页面)
+./run.sh once                          # 只跑一轮(不切壁纸)
+./run.sh once --apply                  # 只跑一轮并切换壁纸
+./run.sh status                        # 状态(JSON)
+./run.sh set-wallpaper <file>          # 手动设一张
+python3 -m unittest discover -s tests  # 单元测试
+```
+
+## 目录与配置
+
+| 路径 | 用途 |
+|---|---|
+| `~/Library/Application Support/omarchy-dynamic-wallpaper/` (mac) | 配置与基准图 |
+| `~/.config/omarchy-dynamic-wallpaper/` (linux) | 同上 |
+| `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | 生成的壁纸库（懒加载缓存） |
+| `~/.cache/omarchy-dynamic-wallpaper/state.json` | 运行状态（含区域探测缓存） |
+
+配置见 `config.example.json`；Prompt 模板占位符：`{weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_cn} {solarterm} {city}`。
+
+> API Key 只保存在本机配置文件中，设置后台仅绑定 127.0.0.1，请勿随意端口转发。
+
+## 注意
+
+- 首次在 macOS 上切换壁纸时，系统可能弹窗要求给终端/Python 授予「自动化-系统事件」权限，允许一次即可。
+- itboy 接口为个人维护的免费服务，波动时程序会自动回落 open-meteo；也可在后台把天气接口固定为 `open-meteo`。
+- 节气采用寿星通式（21 世纪 C 值），2000–2099 年个别年份可能有 ±1 天偏差，对命名场景无影响。
