@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# WeatherDynamic 打包:
-#   ./build-mac.sh            构建 dist/WeatherDynamic.app
-#   ./build-mac.sh dmg        构建 .app + 标准安装 DMG (dist/WeatherDynamic-<ver>.dmg)
+# WeatherDynamicWallpaper 打包:
+#   ./build-mac.sh            构建 dist/WeatherDynamicWallpaper.app
+#   ./build-mac.sh dmg        构建 .app + 标准安装 DMG (dist/WeatherDynamicWallpaper-<ver>.dmg)
 #   ./build-mac.sh install    .app 拷贝到 /Applications + LaunchAgent(登录自启)
 #   ./build-mac.sh release    打 tag 并创建 GitHub Release(附 DMG), 需已配置 remote
 #   ./build-mac.sh uninstall  停止自启动并删除本机安装
@@ -11,8 +11,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="WeatherDynamic"
-BUNDLE_ID="com.friddle.weatherdynamic"
+APP_NAME="WeatherDynamicWallpaper"
+BUNDLE_ID="com.friddle.weatherdynamicwallpaper"
 VERSION="$(python3 -c 'from weatherwall import __version__; print(__version__)')"
 APP="dist/$APP_NAME.app"
 DMG="dist/${APP_NAME}-${VERSION}.dmg"
@@ -53,8 +53,8 @@ build() {
   # 原生 Swift/WKWebView 设置窗口助手(确定性弹窗, 不依赖 pywebview)
   if command -v swiftc >/dev/null 2>&1; then
     swiftc -O -framework Cocoa -framework WebKit \
-      assets/mac_window.swift -o "$APP/Contents/MacOS/WeatherDynamicWindow" 2>/dev/null \
-      && echo "已编译原生窗口助手 WeatherDynamicWindow" \
+      assets/mac_window.swift -o "$APP/Contents/MacOS/WeatherDynamicWallpaperWindow" 2>/dev/null \
+      && echo "已编译原生窗口助手 WeatherDynamicWallpaperWindow" \
       || echo "警告: Swift 编译失败, 双击将回退 pywebview/错误提示"
   else
     echo "警告: 未找到 swiftc(需 Xcode), 无原生窗口助手"
@@ -62,7 +62,7 @@ build() {
 
   cat > "$APP/Contents/MacOS/$APP_NAME" <<LAUNCHER
 #!/bin/bash
-# WeatherDynamic 启动器: 双击=GUI(服务+设置窗口, 装有 pywebview 时原生窗口, 否则浏览器)
+# WeatherDynamicWallpaper 启动器: 双击=GUI(服务+设置窗口, 装有 pywebview 时原生窗口, 否则浏览器)
 # LaunchAgent 自启动请带 "serve" 参数(无界面)
 DIR="\$(cd "\$(dirname "\$0")/../Resources" && pwd)"
 cd "\$DIR"
@@ -84,7 +84,7 @@ LAUNCHER
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>$APP_NAME</string>
-  <key>CFBundleDisplayName</key><string>WeatherDynamic</string>
+  <key>CFBundleDisplayName</key><string>WeatherDynamicWallpaper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
@@ -180,9 +180,9 @@ cmd_release() {
   local notes_file
   notes_file="$(mktemp)"
   cat > "$notes_file" <<NOTES
-**WeatherDynamic v$VERSION** — dynamic weather wallpaper for macOS.
+**WeatherDynamicWallpaper v$VERSION** — dynamic weather wallpaper for macOS.
 
-安装: 下载 DMG → 打开 → 将 WeatherDynamic 拖入 Applications → 双击运行(后台应用, 无 Dock 图标)。
+安装: 下载 DMG → 打开 → 将 WeatherDynamicWallpaper 拖入 Applications → 双击运行(后台应用, 无 Dock 图标)。
 设置后台: http://127.0.0.1:8765
 
 - 安装后如需登录自启: 终端执行 \`./build-mac.sh install\` 或参考 README

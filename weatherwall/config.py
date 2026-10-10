@@ -2,10 +2,68 @@
 
 import json
 import os
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 APP_NAME = "omarchy-dynamic-wallpaper"
+
+# ---------- 汉字->无声调拼音(内置数据, 用于中文文件名归一化) ----------
+
+_PINYIN: dict[str, str] | None = None
+
+
+def pinyin_table() -> dict[str, str]:
+    global _PINYIN
+    if _PINYIN is None:
+        table: dict[str, str] = {}
+        data = Path(__file__).parent / "data" / "pinyin.txt"
+        if data.exists():
+            for line in data.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or " " not in line:
+                    continue
+                ch, py = line.split(" ", 1)
+                if len(ch) == 1:
+                    table[ch] = py.strip()
+        _PINYIN = table
+    return _PINYIN
+
+
+def normalize_stem(name: str, fallback: str = "base") -> str:
+    """文件名主干归一化: 连续汉字合并为拼音词, ASCII字母数字保留, 其余作分隔。
+
+    _哲风壁纸_城市天际线-摩天大楼.jpg -> zhefengbizhi_chengshitianjixian_motiandalou
+    """
+    stem = Path(name).stem if ("." in name) else name
+    tokens: list[str] = []
+    py_buf: list[str] = []
+    ascii_buf: list[str] = []
+
+    def flush():
+        if py_buf:
+            tokens.append("".join(py_buf))
+            py_buf.clear()
+        if ascii_buf:
+            tokens.append("".join(ascii_buf))
+            ascii_buf.clear()
+
+    for ch in stem:
+        if ch.isascii() and ch.isalnum():
+            if py_buf:
+                flush()
+            ascii_buf.append(ch.lower())
+        else:
+            py = pinyin_table().get(ch) if not ch.isascii() else None
+            if py:
+                if ascii_buf:
+                    flush()
+                py_buf.append(py)
+            else:  # 空格/连字符/符号等: 词边界
+                flush()
+    flush()
+    return re.sub(r"_+", "_", "_".join(tokens)).strip("_") or fallback
 
 # 默认 Prompt(英文)。中文用户可自行在设置页改为中文模板。
 DEFAULT_PROMPT = (
@@ -232,14 +290,6 @@ def active_base_path(cfg: dict) -> Path | None:
 
 
 def base_stem(cfg: dict) -> str:
-    """用于目标文件名的基准图名(取上传文件名主干，规范化为小写字母数字)。"""
+    """用于目标文件名的基准图前缀(中文自动转拼音归一化)。"""
     name = (cfg.get("base_image") or "").strip()
-    stem = Path(name).stem if name else "wallpaper"
-    out = []
-    for ch in stem.lower():
-        if ch.isascii() and (ch.isalnum() or ch in "-_"):
-            out.append(ch)
-        elif ch.strip() == "":
-            out.append("_")
-    stem = "".join(out).strip("_") or "wallpaper"
-    return stem
+    return normalize_stem(name, fallback="wallpaper") if name else "wallpaper"

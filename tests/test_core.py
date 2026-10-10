@@ -164,8 +164,20 @@ class TestWeatherMaps(unittest.TestCase):
 class TestConfig(unittest.TestCase):
     def test_base_stem_sanitized(self):
         self.assertEqual(config.base_stem({"base_image": "West Lake.jpg"}), "west_lake")
-        self.assertEqual(config.base_stem({"base_image": "西湖.jpg"}), "wallpaper")
+        self.assertEqual(config.base_stem({"base_image": "西湖.jpg"}), "xihu")  # 中文转拼音
         self.assertEqual(config.base_stem({"base_image": ""}), "wallpaper")
+
+    def test_normalize_stem(self):
+        cases = {
+            "_哲风壁纸_城市天际线-摩天大楼.jpg": "zhefengbizhi_chengshitianjixian_motiandalou",
+            "西湖.jpg": "xihu",
+            "杭州 West Lake.png": "hangzhou_west_lake",
+            "!!!": "base",
+            "westlake": "westlake",
+            "上海-外滩.jpeg": "shanghai_waitan",
+        }
+        for name, want in cases.items():
+            self.assertEqual(config.normalize_stem(name), want, name)
 
     def test_legacy_prompt_migration(self):
         import json

@@ -1,6 +1,6 @@
 """GUI 窗口：确定性地用原生 WebView 展示设置后台页面，绝不回落浏览器。
 
-- macOS: 优先随包分发的原生 Swift/WKWebView 助手(WeatherDynamicWindow)
+- macOS: 优先随包分发的原生 Swift/WKWebView 助手(WeatherDynamicWallpaperWindow)
 - Windows / 其他: pywebview(Windows 打包时已内嵌, WebView2 Evergreen Win10/11 自带)
 - 失败: 弹系统错误对话框说明原因，进程驻留保持后台服务
 """
@@ -11,7 +11,7 @@ import threading
 import time
 from pathlib import Path
 
-WINDOW_TITLE = "WeatherDynamic"
+WINDOW_TITLE = "WeatherDynamicWallpaper"
 WINDOW_SIZE = (1180, 880)
 
 
@@ -21,8 +21,8 @@ def _park() -> None:
 
 
 def _mac_helper_path() -> str | None:
-    """macOS .app 内置的 Swift WKWebView 窗口助手 (Contents/MacOS/WeatherDynamicWindow)。"""
-    exe = Path(__file__).resolve().parent.parent.parent / "MacOS" / "WeatherDynamicWindow"
+    """macOS .app 内置的 Swift WKWebView 窗口助手 (Contents/MacOS/WeatherDynamicWallpaperWindow)。"""
+    exe = Path(__file__).resolve().parent.parent.parent / "MacOS" / "WeatherDynamicWallpaperWindow"
     return str(exe) if exe.exists() else None
 
 

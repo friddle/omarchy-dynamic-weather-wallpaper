@@ -1,4 +1,4 @@
-# WeatherDynamic
+# WeatherDynamicWallpaper
 
 English | [简体中文](README_zh.md)
 
@@ -10,14 +10,14 @@ Get the latest version from [GitHub Releases](https://github.com/friddle/omarchy
 
 | Platform | File | Notes |
 |---|---|---|
-| macOS | `WeatherDynamic-x.y.z.dmg` | Standard DMG, ships with a built-in base image |
-| Windows | `WeatherDynamic.exe` | Single file, just run it |
+| macOS | `WeatherDynamicWallpaper-x.y.z.dmg` | Standard DMG, ships with a built-in base image |
+| Windows | `WeatherDynamicWallpaper.exe` | Single file, just run it |
 
 ## Usage
 
 ### macOS
 
-1. Open the DMG and drag WeatherDynamic into **Applications**.
+1. Open the DMG and drag WeatherDynamicWallpaper into **Applications**.
 2. Launch the app — the settings window pops up right away, and the background service starts with it.
 3. On the **Base & AI** tab, fill in your image-generation API (Base URL / Key / model) — or just click around with the built-in base image first.
 4. Click **Refresh Now**. A wallpaper is generated and applied; from then on the app keeps swapping wallpapers as the weather changes.
@@ -27,7 +27,7 @@ Get the latest version from [GitHub Releases](https://github.com/friddle/omarchy
 
 ### Windows
 
-1. Double-click `WeatherDynamic.exe` — the settings window pops up right away.
+1. Double-click `WeatherDynamicWallpaper.exe` — the settings window pops up right away.
 2. If SmartScreen warns, choose **More info → Run anyway**.
 3. To autostart: `Win+R` → `shell:startup` → drop a shortcut to the exe in that folder.
 

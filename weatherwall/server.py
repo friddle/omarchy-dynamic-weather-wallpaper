@@ -69,6 +69,18 @@ def _image_entry(p: Path, rel: str | None = None) -> dict:
             "mtime": int(p.stat().st_mtime)}
 
 
+def _unique_name(root: Path, name: str) -> str:
+    """同名文件自动追加序号: xxx.jpg / xxx_2.jpg ..."""
+    p = Path(name)
+    stem, suffix = p.stem, p.suffix
+    candidate = name
+    i = 2
+    while (root / candidate).exists():
+        candidate = f"{stem}_{i}{suffix}"
+        i += 1
+    return candidate
+
+
 def _grouped_wallpapers() -> list[dict]:
     """两层壁纸库: [{base, items:[...]}, ...] 按基准图前缀分组。"""
     root = config.cache_dir()
@@ -276,11 +288,11 @@ def make_handler(app: App) -> type:
                         return self._json({"ok": False, "error": "data_b64 解码失败"}, 400)
                     if len(data) > 30 * 1024 * 1024:
                         return self._json({"ok": False, "error": "文件超过 30MB"}, 400)
-                    stem = Path(name).stem
                     suffix = Path(name).suffix.lower()
                     if suffix not in (".jpg", ".jpeg", ".png", ".webp"):
                         suffix = ".jpg"
-                    safe = re.sub(r"[^\w\-. ]+", "_", stem) + suffix
+                    safe = _unique_name(config.base_images_dir(),
+                                        config.normalize_stem(name) + suffix)
                     config.ensure_dirs()
                     (config.base_images_dir() / safe).write_bytes(data)
                     cfg = config.load_config()
@@ -288,6 +300,30 @@ def make_handler(app: App) -> type:
                     config.save_config(cfg)
                     app.log(f"上传基准图: {safe} (已设为生效)")
                     self._json({"ok": True, "name": safe, "stem": config.base_stem(cfg)})
+
+                elif url.path == "/api/base-image-rename":
+                    name = str(body.get("name") or "")
+                    new_stem = config.normalize_stem(str(body.get("new_name") or ""))
+                    p = _safe_file(config.base_images_dir(), name)
+                    if not p:
+                        return self._json({"ok": False, "error": "文件不存在"}, 404)
+                    if not new_stem:
+                        return self._json({"ok": False, "error": "新名称无效"}, 400)
+                    new_name = _unique_name(config.base_images_dir(), new_stem + p.suffix.lower())
+                    old_stem = config.normalize_stem(p.name)
+                    p.rename(config.base_images_dir() / new_name)
+                    # 同步迁移该基准图的壁纸缓存目录(两层壁纸库按前缀分目录)
+                    old_dir = config.wallpaper_dir(old_stem)
+                    new_dir = config.wallpaper_dir(config.normalize_stem(new_name))
+                    if old_dir.exists() and old_dir != new_dir and not new_dir.exists():
+                        old_dir.rename(new_dir)
+                    cfg = config.load_config()
+                    if cfg.get("base_image") == name:
+                        cfg["base_image"] = new_name
+                        config.save_config(cfg)
+                    app.log(f"基准图重命名: {name} -> {new_name}")
+                    self._json({"ok": True, "name": new_name,
+                                "stem": config.normalize_stem(new_name)})
 
                 elif url.path == "/api/base-image-generate":
                     # 弹窗自动生成基准图(文生图, 需已配置 API Key)
@@ -299,12 +335,12 @@ def make_handler(app: App) -> type:
                     if not (cfg["generator"].get("api_key") or "").strip():
                         return self._json({"ok": False,
                                            "error": "尚未配置生图 API Key，请先在 Base & AI 标签页填写"}, 400)
-                    stem = re.sub(r"[^\w\-.]+", "_", str(body.get("name") or "").strip()) \
+                    stem = config.normalize_stem(str(body.get("name") or "")) \
                         or f"base_{_dt.datetime.now().strftime('%m%d_%H%M%S')}"
                     data, ext = _gen.generate_image(
                         cfg["generator"], prompt, None,
                         proxy=str((cfg.get("network") or {}).get("proxy") or ""))
-                    safe = re.sub(r"[^\w\-. ]+", "_", stem) + "." + ext
+                    safe = _unique_name(config.base_images_dir(), f"{stem}.{ext}")
                     config.ensure_dirs()
                     (config.base_images_dir() / safe).write_bytes(data)
                     cfg["base_image"] = safe

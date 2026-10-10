@@ -1,4 +1,4 @@
-# WeatherDynamic
+# WeatherDynamicWallpaper
 
 [English](README.md) | 简体中文
 
@@ -10,14 +10,14 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| macOS | `WeatherDynamic-x.y.z.dmg` | 标准 DMG,内置默认基准图 |
-| Windows | `WeatherDynamic.exe` | 单文件,双击即用 |
+| macOS | `WeatherDynamicWallpaper-x.y.z.dmg` | 标准 DMG,内置默认基准图 |
+| Windows | `WeatherDynamicWallpaper.exe` | 单文件,双击即用 |
 
 ## 使用
 
 ### macOS
 
-1. 打开 DMG,把 WeatherDynamic 拖入 **应用程序**;
+1. 打开 DMG,把 WeatherDynamicWallpaper 拖入 **应用程序**;
 2. 启动应用——设置窗口随即弹出,后台服务同时启动;
 3. 在 **Base & AI** 页填入生图 API(Base URL / Key / 模型),也可以先用内置基准图直接体验;
 4. 点 **立即刷新一轮**,壁纸生成并应用;之后应用会随天气变化自动换壁纸。
@@ -27,7 +27,7 @@
 
 ### Windows
 
-1. 双击 `WeatherDynamic.exe`——设置窗口随即弹出;
+1. 双击 `WeatherDynamicWallpaper.exe`——设置窗口随即弹出;
 2. SmartScreen 拦截时选 **更多信息 → 仍要运行**;
 3. 开机自启:`Win+R` → `shell:startup`,把应用快捷方式放入该文件夹。
 
