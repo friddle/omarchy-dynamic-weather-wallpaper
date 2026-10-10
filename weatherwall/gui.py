@@ -1,44 +1,85 @@
-"""GUI 窗口：用系统原生 WebView 展示设置后台页面。
+"""GUI 窗口：确定性地用原生 WebView 展示设置后台页面，绝不回落浏览器。
 
-优先 pywebview(Windows: WebView2 / macOS: WKWebView)；未安装或初始化失败时
-回落到系统默认浏览器打开，并保持进程驻留(后台服务继续运行)。
+- macOS: 优先随包分发的原生 Swift/WKWebView 助手(WeatherDynamicWindow)
+- Windows / 其他: pywebview(Windows 打包时已内嵌, WebView2 Evergreen Win10/11 自带)
+- 失败: 弹系统错误对话框说明原因，进程驻留保持后台服务
 """
 
+import subprocess
+import sys
 import threading
 import time
-import webbrowser
+from pathlib import Path
 
 WINDOW_TITLE = "WeatherDynamic"
-BG_COLOR = "#0f1117"
+WINDOW_SIZE = (1180, 880)
 
 
 def _park() -> None:
-    """GUI 不可用时驻留进程，保持后台服务运行。"""
     while True:
         time.sleep(3600)
 
 
-def open_url(url: str) -> None:
-    """尽力打开界面：原生窗口 -> 默认浏览器。阻塞直到窗口关闭(或驻留)。"""
-    try:
-        import webview  # pywebview
+def _mac_helper_path() -> str | None:
+    """macOS .app 内置的 Swift WKWebView 窗口助手 (Contents/MacOS/WeatherDynamicWindow)。"""
+    exe = Path(__file__).resolve().parent.parent.parent / "MacOS" / "WeatherDynamicWindow"
+    return str(exe) if exe.exists() else None
 
-        def _on_loaded():
-            pass
+
+def _error_dialog(msg: str) -> None:
+    """尽力弹出系统级错误提示(不用浏览器)。"""
+    print(f"[gui] {msg}", flush=True)
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, WINDOW_TITLE, 0x00000010)
+        elif sys.platform == "darwin":
+            subprocess.run(["osascript", "-e",
+                            f'display dialog "{msg}" with title "{WINDOW_TITLE}" '
+                            f'buttons {{"OK"}} default button "OK" with icon caution'],
+                           timeout=120, capture_output=True)
+        else:
+            subprocess.run(["zenity", "--error", f"--title={WINDOW_TITLE}", f"--text={msg}"],
+                           timeout=120, capture_output=True)
+    except Exception:  # noqa: BLE001 - 对话框失败仅打日志
+        pass
+
+
+def open_url(url: str) -> None:
+    """打开设置窗口，阻塞至窗口关闭(失败则提示并驻留进程)。"""
+    # 1) macOS 原生 Swift 助手
+    if sys.platform == "darwin":
+        helper = _mac_helper_path()
+        if helper:
+            try:
+                subprocess.run([helper, url], check=False)
+                return  # 窗口关闭 = 返回(服务由主进程维持)
+            except OSError as e:
+                _error_dialog(f"窗口助手启动失败: {e}\\n服务仍在后台运行: {url}")
+
+    # 2) pywebview (Windows exe 内嵌)
+    try:
+        import webview
 
         webview.create_window(
             WINDOW_TITLE, url,
-            width=1180, height=880, min_size=(920, 700),
-            background_color=BG_COLOR,
+            width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=(920, 700),
+            background_color="#0f1117",
         )
         webview.start()
         return
-    except Exception as e:  # noqa: BLE001 - 任意失败回落浏览器
-        print(f"pywebview 不可用({e})，回落系统浏览器", flush=True)
-    try:
-        webbrowser.open(url)
-    except Exception:  # noqa: BLE001
-        pass
+    except ImportError:
+        _error_dialog(
+            "未找到 WebView 组件(pywebview)。\\n\\n"
+            "Windows 安装包已内置；源码运行请执行: pip install pywebview\\n"
+            f"服务仍在后台运行: {url}"
+        )
+    except Exception as e:  # noqa: BLE001
+        tip = ""
+        if sys.platform == "win32" and "WebView2" in str(e):
+            tip = "\\n\\n可能是缺少 WebView2 Runtime, 请安装:\\n"
+            tip += "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+        _error_dialog(f"窗口创建失败: {e}{tip}\\n服务仍在后台运行: {url}")
     _park()
 
 

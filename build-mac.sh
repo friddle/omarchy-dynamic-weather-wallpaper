@@ -50,6 +50,16 @@ build() {
   rsync -a --exclude '__pycache__' --exclude '*.pyc' weatherwall/ "$APP/Contents/Resources/weatherwall/"
   cp assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+  # 原生 Swift/WKWebView 设置窗口助手(确定性弹窗, 不依赖 pywebview)
+  if command -v swiftc >/dev/null 2>&1; then
+    swiftc -O -framework Cocoa -framework WebKit \
+      assets/mac_window.swift -o "$APP/Contents/MacOS/WeatherDynamicWindow" 2>/dev/null \
+      && echo "已编译原生窗口助手 WeatherDynamicWindow" \
+      || echo "警告: Swift 编译失败, 双击将回退 pywebview/错误提示"
+  else
+    echo "警告: 未找到 swiftc(需 Xcode), 无原生窗口助手"
+  fi
+
   cat > "$APP/Contents/MacOS/$APP_NAME" <<LAUNCHER
 #!/bin/bash
 # WeatherDynamic 启动器: 双击=GUI(服务+设置窗口, 装有 pywebview 时原生窗口, 否则浏览器)
