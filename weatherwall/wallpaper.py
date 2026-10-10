@@ -1,10 +1,13 @@
-"""壁纸切换：macOS 优先，Windows/Linux(Omarchy-Hyprland) 兼容。
+"""壁纸切换：macOS 优先，Windows/Linux(Omarchy-Hyprland) 兼容。支持多显示器选择。
 
-macOS   : osascript 设置所有桌面空间 (System Events, 失败回落 Finder)
-Windows : PowerShell SystemParametersInfo(SPI_SETDESKWALLPAPER)
-Linux   : swww(Hyprland 动态壁纸) -> hyprpaper -> gsettings(GNOME) -> feh
+macOS   : osascript System Events (按 desktop 序号可指定单个显示器/空间)
+Windows : PowerShell SystemParametersInfo(SPI_SETDESKWALLPAPER) — 单显示器
+Linux   : swww(Hyprland, -o 指定输出) -> hyprpaper -> gsettings -> feh
+
+displays 参数: "all"(默认) 或 序号列表 [1,3] (对应 /api/displays 返回的 index)
 """
 
+import json
 import shutil
 import subprocess
 import sys
@@ -19,18 +22,115 @@ def _run(cmd: list[str], timeout: float = 20.0) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-def _set_macos(path: Path) -> None:
-    p = str(path.resolve())
-    apple = f'tell application "System Events" to tell every desktop to set picture to POSIX file "{p}"'
-    finder = f'tell application "Finder" to set desktop picture to POSIX file "{p}"'
-    for script in (apple, finder):
+# ---------- 显示器枚举 ----------
+
+def _list_displays_macos() -> list[dict]:
+    script = (
+        'tell application "System Events"\n'
+        'set out to ""\n'
+        'repeat with i from 1 to count of desktops\n'
+        'set pn to picture of desktop i\n'
+        'set out to out & i & "|" & (display name of desktop i) & "|" & (pn as string) & linefeed\n'
+        'end repeat\n'
+        'return out\n'
+        'end tell'
+    )
+    r = _run(["osascript", "-e", script])
+    if r.returncode != 0:
+        raise WallpaperError("枚举显示器失败: " + r.stderr.strip()[:150])
+    out = []
+    for line in r.stdout.splitlines():
+        parts = line.split("|")
+        if len(parts) < 3:
+            continue
+        out.append({"index": int(parts[0]), "name": parts[1],
+                    "picture": "" if "missing value" in parts[2] else parts[2]})
+    return out
+
+
+def _list_displays_linux() -> list[dict]:
+    if shutil.which("hyprctl"):
         try:
-            r = _run(["osascript", "-e", script])
+            r = _run(["hyprctl", "-j", "monitors"])
+            out = []
+            for i, m in enumerate(json.loads(r.stdout or "[]"), 1):
+                out.append({"index": i, "name": m.get("name", str(i)), "picture": ""})
+            if out:
+                return out
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    if shutil.which("xrandr"):
+        r = _run(["xrandr", "--query"])
+        out = []
+        for i, line in enumerate(r.stdout.splitlines(), 0):
+            if " connected" in line:
+                out.append({"index": len(out) + 1, "name": line.split(" connected")[0].strip(),
+                            "picture": ""})
+        if out:
+            return out
+    return [{"index": 1, "name": "Default", "picture": ""}]
+
+
+def list_displays() -> list[dict]:
+    try:
+        if sys.platform == "darwin":
+            return _list_displays_macos()
+        if sys.platform.startswith("win") or sys.platform == "cygwin":
+            return [{"index": 1, "name": "Default", "picture": ""}]
+        return _list_displays_linux()
+    except Exception as e:  # noqa: BLE001 - 枚举失败不影响主流程
+        raise WallpaperError(str(e)) from e
+
+
+# ---------- 壁纸设置 ----------
+
+def _norm_displays(displays) -> list[int]:
+    """displays 配置 -> 序号列表; "all"/None/空 返回 [] 表示全部。"""
+    if displays in (None, "all", "", [], "[]"):
+        return []
+    if isinstance(displays, str):
+        displays = [d.strip() for d in displays.split(",") if d.strip()]
+    out = []
+    for d in displays:
+        try:
+            n = int(d)
+            if n not in out:
+                out.append(n)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _set_macos(path: Path, indices: list[int]) -> None:
+    p = str(path.resolve())
+    if not indices:
+        apple = (f'tell application "System Events" to tell every desktop '
+                 f'to set picture to POSIX file "{p}"')
+        try:
+            if _run(["osascript", "-e", apple]).returncode == 0:
+                return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        finder = f'tell application "Finder" to set desktop picture to POSIX file "{p}"'
+        try:
+            r = _run(["osascript", "-e", finder])
             if r.returncode == 0:
                 return
         except (OSError, subprocess.TimeoutExpired):
-            continue
-    raise WallpaperError("osascript 设置壁纸失败(可能需要授予自动化权限)")
+            pass
+        raise WallpaperError("osascript 设置壁纸失败(可能需要授予自动化权限)")
+    errors = []
+    for i in indices:
+        script = (f'tell application "System Events" to tell desktop {int(i)} '
+                  f'to set picture to POSIX file "{p}"')
+        try:
+            r = _run(["osascript", "-e", script])
+            if r.returncode != 0:
+                errors.append(f"desktop {i}: {r.stderr.strip()[:80]}")
+        except (OSError, subprocess.TimeoutExpired) as e:
+            errors.append(f"desktop {i}: {e}")
+    if errors:
+        raise WallpaperError("; ".join(errors))
 
 
 def _set_windows(path: Path) -> None:
@@ -53,46 +153,56 @@ def _set_windows(path: Path) -> None:
         raise WallpaperError(f"调用 powershell 失败: {e}") from e
 
 
-def _set_linux(path: Path) -> None:
+def _linux_output_names(indices: list[int]) -> list[str]:
+    try:
+        r = _run(["hyprctl", "-j", "monitors"])
+        mons = json.loads(r.stdout or "[]")
+        return [mons[i - 1]["name"] for i in indices if 0 < i <= len(mons)]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _set_linux(path: Path, indices: list[int]) -> None:
     p = str(path.resolve())
-    # swww: Hyprland 生态常用
     if shutil.which("swww"):
-        r = _run(["swww", "img", p, "--transition-type", "grow", "--transition-duration", "1.5"])
+        cmd = ["swww", "img", p, "--transition-type", "grow", "--transition-duration", "1.5"]
+        outputs = _linux_output_names(indices) if indices else []
+        if len(outputs) == 1:
+            r = _run(cmd + ["-o", outputs[0]])
+        else:  # 全部或多个输出: swww 默认作用于全部
+            r = _run(cmd)
         if r.returncode == 0:
             return
-    # hyprpaper: 通过 hyprctl 预加载并设置
     if shutil.which("hyprctl"):
         try:
-            import json as _json
             _run(["hyprctl", "hyprpaper", "preload", p])
-            r = _run(["hyprctl", "-j", "monitors"])
-            for m in _json.loads(r.stdout or "[]"):
-                name = m.get("name")
-                if name:
-                    _run(["hyprctl", "hyprpaper", "wallpaper", f"{name},{p}"])
+            mons = json.loads(_run(["hyprctl", "-j", "monitors"]).stdout or "[]")
+            targets = [m["name"] for m in mons if not indices or m.get("id", -1) + 1 in indices
+                       or mons.index(m) + 1 in indices]
+            for name in targets:
+                _run(["hyprctl", "hyprpaper", "wallpaper", f"{name},{p}"])
             _run(["hyprctl", "hyprpaper", "unload", p])
             return
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
-    # GNOME
     if shutil.which("gsettings"):
         uri = "file://" + p
         _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri])
         _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri])
         return
-    # X11 万金油
     if shutil.which("feh"):
         _run(["feh", "--bg-fill", p])
         return
     raise WallpaperError("未找到可用的壁纸工具 (swww/hyprpaper/gsettings/feh)")
 
 
-def set_wallpaper(path: Path) -> None:
+def set_wallpaper(path: Path, displays=None) -> None:
     if not path.exists():
         raise WallpaperError(f"壁纸文件不存在: {path}")
+    indices = _norm_displays(displays)
     if sys.platform == "darwin":
-        _set_macos(path)
+        _set_macos(path, indices)
     elif sys.platform.startswith("win") or sys.platform == "cygwin":
         _set_windows(path)
     else:
-        _set_linux(path)
+        _set_linux(path, indices)

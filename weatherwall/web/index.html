@@ -78,6 +78,11 @@ textarea{resize:vertical;min-height:96px}
 .base-item.active{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
 .base-item .mark{position:absolute;top:6px;left:6px;background:var(--ok);color:#04150c;font-size:10px;
   padding:1px 7px;border-radius:10px;font-weight:600}
+.wall-groups{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chip{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:20px;
+  padding:4px 14px;font:inherit;font-size:12.5px;cursor:pointer}
+.chip:hover{color:var(--text)}
+.chip.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
 .wall-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 .wall-item{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2)}
 .wall-item img{width:100%;height:100px;object-fit:cover;display:block;cursor:pointer}
@@ -95,7 +100,7 @@ textarea{resize:vertical;min-height:96px}
     <span style="font-size:12px;color:var(--muted);font-weight:400" id="ver"></span>
     <span class="lang-switch"><button id="lang-en">EN</button><button id="lang-zh">中文</button></span>
   </h1>
-  <p class="sub" data-i18n="subtitle">Weather + time + temperature → AI-generated wallpaper from your base photo → auto-switch</p>
+  <p class="sub" data-i18n="subtitle">A desktop plugin that keeps generating fresh dynamic wallpapers from your personal environment</p>
 
   <nav class="tabs">
     <button id="tabbtn-status" class="on"><span class="ic">◉</span><span data-i18n="tab_status">Status</span></button>
@@ -267,6 +272,21 @@ textarea{resize:vertical;min-height:96px}
 
     <div class="card">
       <div class="stephead"><div class="stepnum">3</div><div>
+        <h2 data-i18n="disp_title">Target Displays</h2>
+        <p class="desc" data-i18n="disp_desc">Choose which displays the wallpaper applies to. On macOS each Space is listed under its display name — the current picture helps identify them.</p>
+      </div></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn ghost small" id="btn-displays" data-i18n="disp_load">Refresh Display List</button>
+        <span id="disp-status"></span>
+      </div>
+      <div id="disp-list" class="hint" data-i18n="disp_empty">Click refresh to load displays</div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="btn-save-displays" data-i18n="save">Save</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stephead"><div class="stepnum">4</div><div>
         <h2 data-i18n="sch_title">Schedule &amp; Naming</h2>
         <p class="desc" data-i18n="sch_desc">Filename pattern: base_weather_hours_temperature_solarterm.jpg — the lazy-load cache key. Same tags reuse the cached image; any tag change triggers one AI call.</p>
       </div></div>
@@ -293,7 +313,7 @@ textarea{resize:vertical;min-height:96px}
     </div>
 
     <div class="card">
-      <div class="stephead"><div class="stepnum">4</div><div>
+      <div class="stephead"><div class="stepnum">5</div><div>
         <h2 data-i18n="lang_title">Language</h2>
         <p class="desc" data-i18n="lang_desc">Interface language and {weather_name}/{solarterm_name} placeholder output.</p>
       </div></div>
@@ -316,7 +336,8 @@ textarea{resize:vertical;min-height:96px}
   <section id="tab-gallery" class="hidden">
     <div class="card">
       <h2 data-i18n="gal_title">Wallpaper Gallery</h2>
-      <p class="desc" data-i18n="gal_desc">Lazy-load cache. Click an image to apply it instantly.</p>
+      <p class="desc" data-i18n="gal_desc">Two levels: pick a base image, then its generated wallpapers. Click an image to apply it instantly.</p>
+      <div class="wall-groups" id="wall-groups"></div>
       <div class="wall-list" id="wall-list"></div>
     </div>
   </section>
@@ -332,7 +353,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 /* ---------------- i18n ---------------- */
 const I18N={
 en:{
- title:"Dynamic Weather Wallpaper",subtitle:"Weather + time + temperature → AI wallpaper from your base photo → auto-switch",
+ title:"Dynamic Weather Wallpaper",subtitle:"A desktop plugin that keeps generating fresh dynamic wallpapers from your personal environment",
  tab_status:"Status",tab_base:"Base & AI",tab_adv:"Advanced",tab_gallery:"Gallery",
  run_status:"Run Status",st_platform:"Platform / Version",st_region:"Network Channel",
  st_weather:"Weather",st_tags:"Tags (weather / hours / temp / solar term)",st_file:"Target File",
@@ -358,7 +379,10 @@ en:{
  sch_band:"band · quantized range (e.g. 20-25)",sch_minmax:"minmax · daily min-max (e.g. 12-23)",
  sch_bucket:"Time bucket size (hours)",
  lang_title:"Language",lang_desc:"Interface language and {weather_name}/{solarterm_name} placeholder output.",lang_label:"Display language",
- gal_title:"Wallpaper Gallery",gal_desc:"Lazy-load cache. Click an image to apply it instantly.",
+ gal_title:"Wallpaper Gallery",gal_desc:"Two levels: pick a base image, then its generated wallpapers. Click an image to apply it instantly.",
+ disp_title:"Target Displays",disp_desc:"Choose which displays the wallpaper applies to. On macOS each Space is listed under its display name — the current picture helps identify them.",
+ disp_load:"Refresh Display List",disp_empty:"Click refresh to load displays",
+ disp_all:"All displays",disp_count:" displays",disp_saved:"Display settings saved",
  save:"Save",
  t_saved:"Saved",t_gen_q:"Submitted in background (generation is slow), check status later",t_gen_ok:"Done",
  t_located:"Located: ",t_locate_fail:"Locate failed: ",t_no_base:"No base images yet — upload one first",
@@ -371,7 +395,7 @@ en:{
  kw_base:"base",no_key:"no key (fallback)",
 },
 zh:{
- title:"动态天气壁纸",subtitle:"天气 + 时间 + 温度 → 基准图 AI 生成 → 自动切换",
+ title:"动态天气壁纸",subtitle:"针对个人用户的环境不停生成新的动态壁纸的桌面插件",
  tab_status:"运行状态",tab_base:"基准图与 AI",tab_adv:"详细配置",tab_gallery:"壁纸库",
  run_status:"运行状态",st_platform:"平台 / 版本",st_region:"网络通道",
  st_weather:"天气",st_tags:"标签 (天气 / 时段 / 温度 / 节气)",st_file:"目标文件",
@@ -397,7 +421,10 @@ zh:{
  sch_band:"band · 区间量化 (如 20-25)",sch_minmax:"minmax · 当日最低-最高 (如 12-23)",
  sch_bucket:"时段桶大小 (小时)",
  lang_title:"语言",lang_desc:"界面语言及 {weather_name}/{solarterm_name} 占位符输出。",lang_label:"显示语言",
- gal_title:"壁纸库",gal_desc:"懒加载生成的缓存，点击图片立即应用。",
+ gal_title:"壁纸库",gal_desc:"两层结构：先选基准图，再浏览基于它生成的壁纸。点击图片立即应用。",
+ disp_title:"目标显示器",disp_desc:"选择壁纸应用到哪些显示器。macOS 下按显示名列出各个桌面/空间，当前壁纸可帮助辨认。",
+ disp_load:"刷新显示器列表",disp_empty:"点击刷新加载显示器",
+ disp_all:"全部显示器",disp_count:" 块",disp_saved:"显示器设置已保存",
  save:"保存",
  t_saved:"已保存",t_gen_q:"已提交后台执行(生图较慢)，稍后查看状态",t_gen_ok:"完成",
  t_located:"定位到：",t_locate_fail:"定位失败：",t_no_base:"还没有基准图，先上传一张",
@@ -440,6 +467,7 @@ TABS.forEach(name=>$('tabbtn-'+name).onclick=()=>{
   TABS.forEach(n=>{$('tab-'+n).classList.toggle('hidden',n!==name);
     $('tabbtn-'+n).classList.toggle('on',n===name);});
   if(name==='gallery')loadWalls();
+  if(name==='adv'&&!DISPLAYS.length)loadDisplays();
 });
 
 /* ---------------- language ---------------- */
@@ -520,21 +548,72 @@ $('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('drag')};
 $('drop').ondragleave=()=>$('drop').classList.remove('drag');
 $('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('drag');uploadBase(e.dataTransfer.files[0])};
 
-/* ---------------- gallery ---------------- */
-let WALL_CACHE=null;
+/* ---------------- gallery (two-level: base → generated) ---------------- */
+let WALL_CACHE=null,WALL_GROUP=null;
 async function loadWalls(){WALL_CACHE=await api('/api/wallpapers');renderWalls(WALL_CACHE);}
 function renderWalls(r){
-  if(!r)return;const el=$('wall-list');
-  el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">'+t('t_no_walls')+'</div>';
-  for(const it of r.items.slice(0,60)){
+  if(!r)return;
+  const groups=r.groups||[],el=$('wall-list'),chips=$('wall-groups');
+  chips.innerHTML='';
+  if(!groups.length){el.innerHTML='<div class="hint" style="grid-column:1/-1">'+t('t_no_walls')+'</div>';return;}
+  if(!WALL_GROUP||!groups.some(g=>g.base===WALL_GROUP))WALL_GROUP=groups[0].base;
+  for(const g of groups){
+    const c=document.createElement('button');
+    c.className='chip'+(g.base===WALL_GROUP?' on':'');
+    c.textContent=`${g.base} (${g.count})`;
+    c.onclick=()=>{WALL_GROUP=g.base;renderWalls(WALL_CACHE);};
+    chips.appendChild(c);
+  }
+  const g=groups.find(x=>x.base===WALL_GROUP);
+  el.innerHTML='';
+  for(const it of g.items.slice(0,60)){
     const d=document.createElement('div');
     d.className='wall-item';
+    const fname=it.name.split('/').pop();
     d.innerHTML=`<img src="/api/wallpaper-file?name=${encodeURIComponent(it.name)}" title="${LANG==='zh'?'点击应用':'click to apply'}">
-      <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>`;
-    d.querySelector('img').onclick=async()=>{try{await api('/api/apply',{file:it.name});toast(t('t_apply_ok')+it.name)}catch(e){toast(e.message,true)}};
+      <div class="nm" title="${esc(fname)}">${esc(fname)}</div>`;
+    d.querySelector('img').onclick=async()=>{try{await api('/api/apply',{file:it.name});toast(t('t_apply_ok')+fname)}catch(e){toast(e.message,true)}};
     el.appendChild(d);
   }
 }
+
+/* ---------------- displays ---------------- */
+let DISPLAYS=[];
+async function loadDisplays(){
+  try{
+    const r=await api('/api/displays');
+    DISPLAYS=r.displays||[];
+    const selected=Array.isArray(r.selected)?r.selected.map(String):(r.selected==='all'?null:r.selected);
+    const box=$('disp-list');
+    if(!DISPLAYS.length){box.innerHTML='<div class="hint">'+t('disp_empty')+'</div>';$('disp-status').textContent='';return;}
+    let html=`<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="disp-all" ${selected===null?'checked':''} style="width:auto">
+      <span style="color:var(--text);font-size:13px">${t('disp_all')} (${DISPLAYS.length}${t('disp_count')})</span></label>`;
+    for(const d of DISPLAYS){
+      const cur=d.picture?d.picture.split('/').pop():'';
+      const checked=selected&&selected.includes(String(d.index));
+      html+=`<label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer">
+        <input type="checkbox" class="disp-item" data-index="${d.index}" ${checked?'checked':''} ${selected===null?'disabled':''} style="width:auto">
+        <span style="color:var(--text);font-size:13px">#${d.index} · ${esc(d.name)}</span>
+        <span style="color:var(--muted);font-size:11px">${esc(cur)}</span></label>`;
+    }
+    box.innerHTML=html;
+    $('disp-all').onchange=e=>{document.querySelectorAll('.disp-item').forEach(c=>{c.checked=false;c.disabled=e.target.checked;});};
+    document.querySelectorAll('.disp-item').forEach(c=>c.onchange=()=>{
+      const any=[...document.querySelectorAll('.disp-item')].some(x=>x.checked);
+      $('disp-all').checked=!any;
+      document.querySelectorAll('.disp-item').forEach(x=>x.disabled=!any&&false);
+    });
+    $('disp-status').innerHTML=`<span class="badge ok">${DISPLAYS.length}${t('disp_count')}</span>`;
+  }catch(e){$('disp-status').innerHTML='<span class="badge err">'+esc(e.message)+'</span>';}
+}
+$('btn-displays').onclick=loadDisplays;
+$('btn-save-displays').onclick=async()=>{
+  const all=$('disp-all')&&$('disp-all').checked;
+  const picked=[...(document.querySelectorAll('.disp-item:checked'))].map(c=>+c.dataset.index);
+  try{await api('/api/config',{config:{wallpaper:{displays:all?'all':picked}}});
+    toast(t('disp_saved'));}catch(e){toast(e.message,true)}
+};
 
 /* ---------------- city picker ---------------- */
 let CHINA=[],US=[];

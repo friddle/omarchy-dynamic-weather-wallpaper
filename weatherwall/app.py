@@ -20,6 +20,12 @@ class App:
         self._stop = threading.Event()
         self.state: dict = {"log": []}
         self._load_state()
+        try:
+            moved = config.migrate_wallpaper_cache()  # 旧扁平结构 -> 按基准图分目录
+            if moved:
+                self.log(f"壁纸库迁移: {moved} 张已按基准图分目录")
+        except OSError:
+            pass
 
     # ---------- 状态与日志 ----------
 
@@ -86,8 +92,10 @@ class App:
             self.log(f"标签: {tags['weather']} | {tags['hours']} | {tags['temp']} | "
                      f"{tags['solarterm']}({tags['solarterm_cn']}) -> {stem}")
 
-            # 4. 懒加载：缓存命中直接用，未命中调生图
-            target = naming.find_cached(config.cache_dir(), stem)
+            # 4. 懒加载：两层壁纸库 wallpapers/{基准图前缀}/，缓存命中直接用
+            wdir = config.wallpaper_dir(base_name)
+            wdir.mkdir(parents=True, exist_ok=True)
+            target = naming.find_cached(wdir, stem)
             cached = target is not None
             if force_regenerate and cached:
                 target.unlink()
@@ -100,19 +108,21 @@ class App:
                 data, ext = generate.generate_image(
                     cfg["generator"], prompt, base_path,
                     proxy=region_net_proxy(cfg))
-                target = config.cache_dir() / f"{stem}.{ext}"
+                target = wdir / f"{stem}.{ext}"
                 target.write_bytes(data)
-                self.log(f"AI 生图完成 -> {target.name} "
+                self.log(f"AI 生图完成 -> {base_name}/{target.name} "
                          f"({'基准图模式' if base_path else '文生图模式'}, "
                          f"{'降级直用基准图' if not cfg['generator'].get('api_key') else 'API生成'})")
 
-            # 5. 切换壁纸
+            # 5. 切换壁纸(可指定显示器)
             should_apply = cfg["wallpaper"].get("apply", True) if apply is None else apply
+            displays = cfg["wallpaper"].get("displays", "all")
             applied = False
             if should_apply:
-                wallpaper.set_wallpaper(target)
+                wallpaper.set_wallpaper(target, displays=displays)
                 applied = True
-                self.log(f"壁纸已切换: {target.name}")
+                self.log(f"壁纸已切换: {base_name}/{target.name} "
+                         f"(显示器: {displays if displays != 'all' else 'all'})")
 
             self.state.update({
                 "last_run": dt.datetime.now().isoformat(timespec="seconds"),

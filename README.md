@@ -1,6 +1,8 @@
 # omarchy-dynamic-weather-wallpaper
 
-动态天气壁纸：**读温度 + 时间 + 天气 → 基准图 + AI 生成 → 系统自动切换**。
+**针对个人用户的环境不停生成新的动态壁纸的桌面插件**——持续感知你所在城市的天气、气温、时段与节气，基于你的基准照片用 AI 生成氛围壁纸并自动切换（懒加载缓存，同标签组合只生成一次）。
+
+主流程：读温度 + 时间 + 天气 → 基准图 + AI 生成 → 系统自动切换。国内/国外双通道自动探测。
 
 为 Omarchy (Arch + Hyprland) 而生，同时兼容 **macOS**（当前主力支持）与 **Windows**（基础支持）。仅依赖 Python 3 标准库，无任何 pip 依赖。
 
@@ -19,20 +21,23 @@
 
 ## 快速开始 (macOS)
 
+方式一：**打包成 App 安装（推荐，含登录自启 + 崩溃自动拉起）**：
+
+```bash
+./build-mac.sh install      # 构建 dist/WeatherWall.app -> 拷贝到 /Applications -> 安装 LaunchAgent
+open http://127.0.0.1:8765  # 设置后台
+./build-mac.sh uninstall    # 停止自启动并删除应用(配置与壁纸保留)
+```
+
+方式二：源码直接运行：
+
 ```bash
 ./run.sh init          # 探测国内/国外通道，生成默认配置
 ./run.sh serve         # 启动设置后台 + 自动循环
 open http://127.0.0.1:8765
 ```
 
-在设置后台上传一张**基准图**（如 `westlake.jpg`），填好生图 API 后点「立即刷新一轮」即可看到效果。
-
-自启动安装/卸载：
-
-```bash
-./install.sh mac       # 安装 LaunchAgent 并启动
-./install.sh remove    # 卸载
-```
+在设置后台上传一张**基准图**（如 `westlake.jpg`），填好生图 API 后点「立即刷新一轮」即可看到效果。源码方式的自启动：`./install.sh mac` / 卸载 `./install.sh remove`。
 
 ## 设置后台 (http://127.0.0.1:8765)
 
@@ -42,8 +47,12 @@ open http://127.0.0.1:8765
 |---|---|
 | Status | 运行状态 + 常用操作（立即刷新 / 强制重新生图 / 探测通道 / 测试天气）+ 日志 |
 | Base & AI | 上传/管理基准图（点击生效、右键删除）+ 生图配置（Base URL / Key / 模型 / Prompt） |
-| Advanced | 分步引导：① 网络通道+代理 ② 天气源+城市（选 QWeather/OpenWeatherMap 才显示 Key 输入框，附获取步骤）③ 刷新与命名规则 ④ 显示语言 |
-| Gallery | 已生成壁纸网格，点击立即应用 |
+| Advanced | 分步引导：① 网络通道+代理 ② 天气源+城市（选 QWeather/OpenWeatherMap 才显示 Key 输入框，附获取步骤）③ 目标显示器（多显示器勾选）④ 刷新与命名规则 ⑤ 显示语言 |
+| Gallery | **两层壁纸库**：上层按基准图分组切换，下层展示基于该基准图生成的壁纸，点击立即应用 |
+
+**多显示器**：Advanced → 目标显示器，可勾选壁纸应用到哪几台（macOS 按显示名列出各桌面/空间，附当前壁纸名便于辨认；默认全部）。
+
+城市选择：先选国家（中国 41 城 / 美国 20 城 / 其他自定义），再选城市；支持 **IP 自动定位**（走 ip-api，强制直连不经代理）。中国城市会自动带上 itboy 城市码，国外城市走 open-meteo geocoding。
 
 城市选择：先选国家（中国 41 城 / 美国 20 城 / 其他自定义），再选城市；支持 **IP 自动定位**（走 ip-api，强制直连不经代理）。中国城市会自动带上 itboy 城市码，国外城市走 open-meteo geocoding。
 
@@ -108,7 +117,7 @@ python3 -m unittest discover -s tests  # 单元测试
 |---|---|
 | `~/Library/Application Support/omarchy-dynamic-wallpaper/` (mac) | 配置与基准图 |
 | `~/.config/omarchy-dynamic-wallpaper/` (linux) | 同上 |
-| `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | 生成的壁纸库（懒加载缓存） |
+| `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | 两层壁纸库：`{基准图前缀}/生成图.jpg`（懒加载缓存，旧扁平结构自动迁移） |
 | `~/.cache/omarchy-dynamic-wallpaper/state.json` | 运行状态（含区域探测缓存） |
 
 配置见 `config.example.json`；Prompt 模板默认英文（可改中文），多语言占位符：`{weather_name}` `{weather_en}` `{weather_cn}` `{weather}` `{temp}` `{temp_min}` `{temp_max}` `{hours}` `{solarterm_name}` `{solarterm_en}` `{solarterm_cn}` `{solarterm}` `{city}`（`*_name` 跟随界面语言输出）。

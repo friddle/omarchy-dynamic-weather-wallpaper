@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -83,6 +84,25 @@ class TestNaming(unittest.TestCase):
             hit = naming.find_cached(d, "westlake_rain_1216_20-25_springbegin")
             self.assertIsNotNone(hit)
             self.assertEqual(hit.suffix, ".jpg")
+
+    def test_wallpaper_cache_migration(self):
+        from weatherwall import config as cfg_mod
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(cfg_mod, "cache_dir", return_value=Path(td)):
+                # 旧扁平结构
+                for name in ("westlake_sunny_1216_25-30_colddew.jpg",
+                             "mountainmist_rain_0804_15-20_colddew.jpg",
+                             "wallpaper_sunny_1216_25-30_colddew.png"):
+                    (Path(td) / name).write_bytes(b"x")
+                moved = cfg_mod.migrate_wallpaper_cache()
+                self.assertEqual(moved, 3)
+                self.assertTrue((Path(td) / "westlake" / "westlake_sunny_1216_25-30_colddew.jpg").exists())
+                self.assertTrue((Path(td) / "mountainmist" / "mountainmist_rain_0804_15-20_colddew.jpg").exists())
+                self.assertTrue((Path(td) / "wallpaper" / "wallpaper_sunny_1216_25-30_colddew.png").exists())
+                self.assertEqual([p.name for p in Path(td).iterdir() if p.is_file()], [])
+                # 幂等
+                self.assertEqual(cfg_mod.migrate_wallpaper_cache(), 0)
+                self.assertEqual(cfg_mod.wallpaper_dir("westlake").name, "westlake")
 
     def test_prompt_fill(self):
         tags = naming.compose_tags(self.weather(), dt.datetime(2026, 2, 5, 13), self.NAMING)

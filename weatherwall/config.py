@@ -58,7 +58,10 @@ DEFAULT_CONFIG = {
         "timeout_seconds": 300,
     },
     "server": {"host": "127.0.0.1", "port": 8765},
-    "wallpaper": {"apply": True},
+    "wallpaper": {
+        "apply": True,
+        "displays": "all",   # "all" 或 序号列表 [1,3] (对应 /api/displays 返回的 index)
+    },
     "base_image": "",             # base_images/ 下的文件名
     "ui": {
         "language": "en",         # 展示语言: en(默认) / zh
@@ -97,6 +100,34 @@ def base_images_dir() -> Path:
 
 def cache_dir() -> Path:
     return _cache_dir() / "wallpapers"
+
+
+WALLPAPER_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def wallpaper_dir(base_name: str) -> Path:
+    """两层壁纸库: wallpapers/{基准图前缀}/xxx.jpg"""
+    safe = "".join(c for c in base_name if c.isalnum() or c in "-_") or "misc"
+    return cache_dir() / safe
+
+
+def migrate_wallpaper_cache() -> int:
+    """旧版扁平结构迁移为按基准图分目录(取文件名第一个 _ 前的前缀)。幂等。"""
+    root = cache_dir()
+    if not root.exists():
+        return 0
+    moved = 0
+    for f in list(root.iterdir()):
+        if f.is_file() and f.suffix.lower() in WALLPAPER_EXTS:
+            base = f.stem.split("_", 1)[0] or "misc"
+            dest_dir = root / base
+            dest_dir.mkdir(exist_ok=True)
+            target = dest_dir / f.name
+            if not target.exists():
+                import shutil
+                shutil.move(str(f), str(target))
+                moved += 1
+    return moved
 
 
 def state_file() -> Path:

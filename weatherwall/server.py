@@ -37,17 +37,42 @@ SAFE_NAME = re.compile(r"^[^/\\]+$")
 
 
 def _safe_file(root: Path, name: str) -> Path | None:
-    if not name or not SAFE_NAME.match(name) or ".." in name:
+    """支持一层子目录(两层壁纸库 wallpapers/{base}/{file}.jpg)，防目录穿越。"""
+    if not name or ".." in name:
         return None
-    p = (root / name).resolve()
-    if root.resolve() not in p.parents and p.parent != root.resolve():
+    parts = name.split("/")
+    if len(parts) > 2 or not all(SAFE_NAME.match(p) for p in parts):
+        return None
+    p = root.joinpath(*parts).resolve()
+    root_r = root.resolve()
+    if p.parent != root_r and p.parent.parent != root_r:
         return None
     return p if p.exists() else None
 
 
-def _image_entry(p: Path) -> dict:
-    return {"name": p.name, "size": p.stat().st_size,
+def _image_entry(p: Path, rel: str | None = None) -> dict:
+    return {"name": rel or p.name, "size": p.stat().st_size,
             "mtime": int(p.stat().st_mtime)}
+
+
+def _grouped_wallpapers() -> list[dict]:
+    """两层壁纸库: [{base, items:[...]}, ...] 按基准图前缀分组。"""
+    root = config.cache_dir()
+    groups: dict[str, list] = {}
+    if root.exists():
+        for p in sorted(root.rglob("*")):
+            if not p.is_file() or p.suffix.lower() not in config.WALLPAPER_EXTS:
+                continue
+            rel = str(p.relative_to(root))
+            base = rel.split("/", 1)[0] if "/" in rel else "(misc)"
+            groups.setdefault(base, []).append(_image_entry(p, rel))
+    out = []
+    for base, items in groups.items():
+        items.sort(key=lambda x: x["mtime"], reverse=True)
+        out.append({"base": base, "count": len(items), "latest": items[0]["mtime"] if items else 0,
+                    "items": items})
+    out.sort(key=lambda g: g["latest"], reverse=True)
+    return out
 
 
 def make_handler(app: App) -> type:
@@ -102,10 +127,12 @@ def make_handler(app: App) -> type:
                     cfg = config.load_config()
                     self._json({"ok": True, "config": cfg})
                 elif url.path == "/api/wallpapers":
-                    files = sorted(config.cache_dir().glob("*"),
-                                   key=lambda p: p.stat().st_mtime, reverse=True)
-                    self._json({"ok": True, "items": [_image_entry(p) for p in files
-                                                      if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")]})
+                    self._json({"ok": True, "groups": _grouped_wallpapers()})
+                elif url.path == "/api/displays":
+                    self._json({"ok": True,
+                                "displays": wallpaper.list_displays(),
+                                "selected": config.load_config().get("wallpaper", {})
+                                            .get("displays", "all")})
                 elif url.path == "/api/wallpaper-file":
                     p = _safe_file(config.cache_dir(), (qs.get("name") or [""])[0])
                     if not p:
@@ -219,8 +246,9 @@ def make_handler(app: App) -> type:
                     p = _safe_file(config.cache_dir(), name)
                     if not p:
                         return self._json({"ok": False, "error": "文件不存在"}, 404)
-                    wallpaper.set_wallpaper(p)
-                    app.log(f"手动应用壁纸: {p.name}")
+                    displays = config.load_config().get("wallpaper", {}).get("displays", "all")
+                    wallpaper.set_wallpaper(p, displays=displays)
+                    app.log(f"手动应用壁纸: {name} (显示器: {displays})")
                     self._json({"ok": True})
 
                 elif url.path == "/api/base-image":

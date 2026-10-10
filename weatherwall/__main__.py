@@ -45,10 +45,23 @@ def cmd_once(app: App, args) -> int:
 
 
 def cmd_serve(app: App, args) -> int:
+    import socket
+    import time
+
     from . import server
     cfg = config.load_config()
     host = args.host or cfg["server"]["host"]
     port = args.port or cfg["server"]["port"]
+
+    # 单实例保护: 已有实例在监听则本进程挂起(避免 launchd 重启/双击导致重复调度)
+    if host in ("127.0.0.1", "localhost", "0.0.0.0", "::1"):
+        with socket.socket() as s:
+            s.settimeout(1)
+            if s.connect_ex(("127.0.0.1", int(port))) == 0:
+                print(f"已有实例运行于 127.0.0.1:{port}，本进程挂起待命")
+                while True:
+                    time.sleep(3600)
+
     app.start_scheduler()
     server.serve(app, host, port)
     return 0
