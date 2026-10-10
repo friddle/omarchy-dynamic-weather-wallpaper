@@ -60,11 +60,4 @@ cd omarchy-dynamic-weather-wallpaper
 
 Python 3 standard library only, no pip dependencies. Wallpaper switching auto-detects swww / hyprpaper / gsettings / feh.
 
-## Data locations
-
-| Path | Purpose |
-|---|---|
-| `~/Library/Application Support/omarchy-dynamic-wallpaper/` (mac) · `~/.config/omarchy-dynamic-wallpaper/` (linux) | Config and base images |
-| `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | Wallpaper cache |
-
 > API keys are stored only in the local config file.

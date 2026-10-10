@@ -60,11 +60,4 @@ cd omarchy-dynamic-weather-wallpaper
 
 仅依赖 Python 3 标准库,无需 pip 安装。壁纸切换自动探测 swww / hyprpaper / gsettings / feh。
 
-## 数据位置
-
-| 路径 | 用途 |
-|---|---|
-| `~/Library/Application Support/omarchy-dynamic-wallpaper/`(mac)· `~/.config/omarchy-dynamic-wallpaper/`(linux) | 配置与基准图 |
-| `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | 壁纸库缓存 |
-
 > API Key 仅保存在本机配置文件中。
