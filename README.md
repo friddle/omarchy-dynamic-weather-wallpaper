@@ -21,10 +21,18 @@
 
 ## 快速开始 (macOS)
 
-方式一：**打包成 App 安装（推荐，含登录自启 + 崩溃自动拉起）**：
+方式一：**DMG 安装（标准分发）**：
 
 ```bash
-./build-mac.sh install      # 构建 dist/WeatherWall.app -> 拷贝到 /Applications -> 安装 LaunchAgent
+./build-mac.sh dmg          # 构建 dist/WeatherDynamic-<版本>.dmg
+open dist/                  # 双击 DMG -> 将 WeatherDynamic 拖入 Applications
+# 或直接下载 GitHub Release 页面的 DMG
+```
+
+方式二：App + 开机自启（LaunchAgent，登录自启 + 崩溃自动拉起）：
+
+```bash
+./build-mac.sh install      # 构建 dist/WeatherDynamic.app -> 拷贝到 /Applications -> 安装 LaunchAgent
 open http://127.0.0.1:8765  # 设置后台
 ./build-mac.sh uninstall    # 停止自启动并删除应用(配置与壁纸保留)
 ```
@@ -92,11 +100,20 @@ westlake_rain_1216_20-25_springbegin.jpg
 
 | 平台 | 壁纸切换方式 | 状态 |
 |---|---|---|
-| macOS | `osascript` 设置所有桌面空间（System Events → Finder 回落） | ✅ 主力支持 |
+| macOS | `osascript` 按显示器/桌面设置（System Events → Finder 回落） | ✅ 主力支持 |
 | Omarchy / Linux | `swww` → `hyprpaper(hyprctl)` → `gsettings` → `feh` 自动探测 | ✅（Linux 侧标准工具链） |
 | Windows | PowerShell `SystemParametersInfo` | ⚠️ 基础支持，未实测 |
 
 Linux/Omarchy 安装：`./install.sh linux`（systemd 用户服务，无 systemd 时提示 Hyprland `exec-once` 写法）。
+
+## 分发签名说明
+
+`build-mac.sh` 自动探测钥匙串中的 **Developer ID Application** 证书：
+
+- **有证书**：`codesign --options runtime --timestamp` 正式签名，配合公证（`xcrun notarytool submit`）后其他人可直接双击运行。
+  证书申请：Xcode → Settings → Accounts → 登录 Apple Developer（付费账号）→ Manage Certificates → ➕ → **Developer ID Application**；
+  公证凭据：`xcrun notarytool store-credentials <profile> --apple-id <id> --team-id <team>`。
+- **无证书**：ad-hoc 签名，本机可直接运行；其他人首次打开需 **右键 → 打开**（或系统设置中允许）。
 
 ## 常用命令
 

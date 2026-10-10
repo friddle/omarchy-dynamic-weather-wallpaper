@@ -1,0 +1,76 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3854e8"/>
+      <stop offset="0.55" stop-color="#5b6cff"/>
+      <stop offset="1" stop-color="#8a5bff"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe08a"/>
+      <stop offset="1" stop-color="#ff9d3c"/>
+    </linearGradient>
+    <linearGradient id="cloud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dbe4ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd76a" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ffd76a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="26" flood-color="#1b255e" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- squircle 底 -->
+  <rect x="20" y="20" width="984" height="984" rx="230" fill="url(#bg)"/>
+  <rect x="20" y="20" width="984" height="984" rx="230" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="6"/>
+  <!-- 顶部高光 -->
+  <path d="M 250 46 C 420 -18 720 -6 870 92 C 800 60 640 34 500 52 C 390 66 300 100 250 46 Z"
+        fill="#ffffff" opacity="0.10"/>
+
+  <!-- 太阳 (weather) -->
+  <circle cx="700" cy="330" r="235" fill="url(#glow)"/>
+  <g stroke="url(#sun)" stroke-width="30" stroke-linecap="round" opacity="0.95">
+    <line x1="700" y1="128" x2="700" y2="168"/>
+    <line x1="700" y1="492" x2="700" y2="532"/>
+    <line x1="498" y1="330" x2="538" y2="330"/>
+    <line x1="862" y1="330" x2="902" y2="330"/>
+    <line x1="557" y1="187" x2="585" y2="215"/>
+    <line x1="815" y1="445" x2="843" y2="473"/>
+    <line x1="843" y1="187" x2="815" y2="215"/>
+    <line x1="585" y1="445" x2="557" y2="473"/>
+  </g>
+  <circle cx="700" cy="330" r="108" fill="url(#sun)"/>
+
+  <!-- 云 (weather) -->
+  <g filter="url(#soft)">
+    <circle cx="430" cy="646" r="92" fill="url(#cloud)"/>
+    <circle cx="548" cy="600" r="122" fill="url(#cloud)"/>
+    <circle cx="668" cy="652" r="86" fill="url(#cloud)"/>
+    <rect x="430" y="640" width="238" height="98" rx="49" fill="url(#cloud)"/>
+  </g>
+
+  <!-- AI: 云上神经网络节点 + 四角星光 -->
+  <g stroke="#5b6cff" stroke-width="9" stroke-linecap="round" opacity="0.9">
+    <line x1="490" y1="668" x2="560" y2="700"/>
+    <line x1="560" y1="700" x2="630" y2="662"/>
+    <line x1="490" y1="668" x2="560" y2="636"/>
+    <line x1="560" y1="636" x2="630" y2="662"/>
+  </g>
+  <g fill="#5b6cff">
+    <circle cx="490" cy="668" r="17"/>
+    <circle cx="560" cy="700" r="20"/>
+    <circle cx="560" cy="636" r="14"/>
+    <circle cx="630" cy="662" r="17"/>
+  </g>
+  <!-- AI sparkle -->
+  <g filter="url(#soft)">
+    <path d="M 778 560 C 794 626 810 642 876 658 C 810 674 794 690 778 756
+             C 762 690 746 674 680 658 C 746 642 762 626 778 560 Z"
+          fill="#ffffff"/>
+    <path d="M 872 700 C 880 730 888 738 918 746 C 888 754 880 762 872 792
+             C 864 762 856 754 826 746 C 856 738 864 730 872 700 Z"
+          fill="#ffe08a"/>
+  </g>
+</svg>
