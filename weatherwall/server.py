@@ -23,6 +23,7 @@ import base64
 import datetime as dt
 import json
 import re
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +33,19 @@ from . import config, naming, region, wallpaper
 from .app import App
 from . import net
 from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
+
+
+def web_index_path() -> Path:
+    """设置页静态文件；兼容 PyInstaller 冻结(--onefile 时在 _MEIPASS)。"""
+    p = Path(__file__).parent / "web" / "index.html"
+    if p.exists():
+        return p
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        frozen = Path(meipass) / "weatherwall" / "web" / "index.html"
+        if frozen.exists():
+            return frozen
+    return p
 
 SAFE_NAME = re.compile(r"^[^/\\]+$")
 
@@ -117,8 +131,7 @@ def make_handler(app: App) -> type:
             qs = parse_qs(url.query)
             try:
                 if url.path in ("/", "/index.html"):
-                    page = Path(__file__).parent / "web" / "index.html"
-                    self._file(page, "text/html; charset=utf-8")
+                    self._file(web_index_path(), "text/html; charset=utf-8")
                 elif url.path == "/api/cities":
                     self._json({"ok": True, "china": china_cities(), "us": US_CITIES})
                 elif url.path == "/api/status":

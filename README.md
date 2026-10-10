@@ -102,9 +102,16 @@ westlake_rain_1216_20-25_springbegin.jpg
 |---|---|---|
 | macOS | `osascript` 按显示器/桌面设置（System Events → Finder 回落） | ✅ 主力支持 |
 | Omarchy / Linux | `swww` → `hyprpaper(hyprctl)` → `gsettings` → `feh` 自动探测 | ✅（Linux 侧标准工具链） |
-| Windows | PowerShell `SystemParametersInfo` | ⚠️ 基础支持，未实测 |
+| Windows | PowerShell `SystemParametersInfo` | ✅ 打包支持（GitHub Actions + PyInstaller） |
 
 Linux/Omarchy 安装：`./install.sh linux`（systemd 用户服务，无 systemd 时提示 Hyprland `exec-once` 写法）。
+
+### Windows
+
+- **分发**：GitHub Actions 在 Windows runner 上用 PyInstaller 构建单文件 `WeatherDynamic.exe`（`--windowed` 后台服务，带应用图标），打 `v*` tag 自动附到 GitHub Release。手动触发：Actions → build-windows → Run workflow。
+- **使用**：双击 `WeatherDynamic.exe` 运行（无窗口），浏览器打开 http://127.0.0.1:8765 配置。exe 未签名，SmartScreen 拦截时选「更多信息 → 仍要运行」。
+- **开机自启**：`Win+R` → `shell:startup` → 放入 WeatherDynamic.exe 的快捷方式。
+- 源码运行：`python -m weatherwall serve`（仅标准库，无需 pip 安装）。
 
 ## 分发签名说明
 

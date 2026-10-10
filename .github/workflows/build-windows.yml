@@ -1,0 +1,62 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests
+
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --windowed --clean --noconfirm
+          --name WeatherDynamic
+          --icon assets/icon.ico
+          --add-data "weatherwall/web/index.html;weatherwall/web"
+          winmain.py
+
+      - name: Smoke test (run 5s and hit status API)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\WeatherDynamic.exe" -PassThru
+          Start-Sleep -Seconds 6
+          try {
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/status" -TimeoutSec 5
+            if ($r.version) { Write-Host "OK: exe running, version $($r.version), platform $($r.platform)" }
+            else { Write-Error "status API unexpected"; exit 1 }
+          } finally { Stop-Process -Id $p.Id -Force }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeatherDynamic-windows
+          path: dist/WeatherDynamic.exe
+
+      - name: Attach to release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WeatherDynamic.exe
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            **WeatherDynamic Windows 测试版**
+
+            下载 WeatherDynamic.exe 直接运行（后台服务，无窗口），然后浏览器打开
+            http://127.0.0.1:8765 进行配置。
+
+            注意：exe 未签名，Windows SmartScreen 可能拦截 —— 点击「更多信息 → 仍要运行」。
