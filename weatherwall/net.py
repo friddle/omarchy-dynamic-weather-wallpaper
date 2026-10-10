@@ -18,7 +18,10 @@ def cfg_proxy(cfg: dict | None) -> str:
     return str((cfg.get("network") or {}).get("proxy") or "").strip()
 
 
-def opener(proxy: str = "") -> urllib.request.OpenerDirector:
+def opener(proxy: str = "", direct: bool = False) -> urllib.request.OpenerDirector:
+    if direct:
+        # 强制直连: 忽略配置代理与系统/环境变量代理(IP 定位等场景)
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
     if proxy:
         return urllib.request.build_opener(
             urllib.request.ProxyHandler({"http": proxy, "https": proxy})
@@ -28,15 +31,16 @@ def opener(proxy: str = "") -> urllib.request.OpenerDirector:
 
 
 def request(url: str, data: bytes | None = None, headers: dict | None = None,
-            timeout: float = 12.0, proxy: str = "", method: str | None = None):
+            timeout: float = 12.0, proxy: str = "", method: str | None = None,
+            direct: bool = False):
     req = urllib.request.Request(url, data=data, headers={"User-Agent": UA, **(headers or {})},
                                  method=method or ("POST" if data is not None else "GET"))
-    return opener(proxy).open(req, timeout=timeout)
+    return opener(proxy, direct=direct).open(req, timeout=timeout)
 
 
 def http_json(url: str, timeout: float = 12.0, proxy: str = "", headers: dict | None = None,
-              data: bytes | None = None) -> dict:
-    with request(url, data=data, headers=headers, timeout=timeout, proxy=proxy) as resp:
+              data: bytes | None = None, direct: bool = False) -> dict:
+    with request(url, data=data, headers=headers, timeout=timeout, proxy=proxy, direct=direct) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -45,9 +49,9 @@ def http_bytes(url: str, timeout: float = 12.0, proxy: str = "") -> bytes:
         return resp.read()
 
 
-def reachable(url: str, timeout: float = 5.0, proxy: str = "") -> bool:
+def reachable(url: str, timeout: float = 5.0, proxy: str = "", direct: bool = False) -> bool:
     try:
-        with request(url, timeout=timeout, proxy=proxy) as resp:
+        with request(url, timeout=timeout, proxy=proxy, direct=direct) as resp:
             resp.read(64)
             return True
     except Exception:

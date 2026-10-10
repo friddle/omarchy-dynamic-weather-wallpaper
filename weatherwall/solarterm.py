@@ -41,6 +41,28 @@ _EXCEPTIONS = {
     ("春分", 2084): 1,
 }
 
+# 英文标签 -> 展示名(多语言)
+SOLARTERM_EN = {
+    "minorcold": "Minor Cold", "majorcold": "Major Cold",
+    "springbegin": "Start of Spring", "rainwater": "Rain Water",
+    "insectsawaken": "Insects Awaken", "springequinox": "Spring Equinox",
+    "clearandbright": "Pure Brightness", "grainrain": "Grain Rain",
+    "summerbegin": "Start of Summer", "grainbuds": "Grain Buds",
+    "graininear": "Grain in Ear", "summersolstice": "Summer Solstice",
+    "minorheat": "Minor Heat", "majorheat": "Major Heat",
+    "autumnbegin": "Start of Autumn", "endofheat": "End of Heat",
+    "whitedew": "White Dew", "autumnequinox": "Autumn Equinox",
+    "colddew": "Cold Dew", "frostfall": "Frost's Descent",
+    "winterbegin": "Start of Winter", "minorsnow": "Minor Snow",
+    "majorsnow": "Major Snow", "wintersolstice": "Winter Solstice",
+}
+
+SOLARTERM_CN = {en: cn for cn, en, _, _ in TERMS}
+
+
+def solarterm_display(en_tag: str, lang: str = "en") -> str:
+    return SOLARTERM_EN.get(en_tag, en_tag) if lang == "en" else SOLARTERM_CN.get(en_tag, en_tag)
+
 
 def term_date(year: int, index: int) -> _dt.date:
     """计算某年第 index 个节气(0=小寒)的具体日期。"""

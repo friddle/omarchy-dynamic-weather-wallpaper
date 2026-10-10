@@ -85,13 +85,18 @@ class TestNaming(unittest.TestCase):
             self.assertEqual(hit.suffix, ".jpg")
 
     def test_prompt_fill(self):
-        template = "{weather_cn} {temp} {solarterm_cn} {city} {no_such_placeholder}"
         tags = naming.compose_tags(self.weather(), dt.datetime(2026, 2, 5, 13), self.NAMING)
-        out = naming.fill_prompt(template, tags, "杭州市", "westlake")
-        self.assertIn("雨", out)
-        self.assertIn("立春", out)
-        self.assertIn("杭州市", out)
-        self.assertIn("{no_such_placeholder}", out)  # 未知占位符原样保留
+        # 语言相关占位符: name 跟随 lang, en/cn 固定
+        out_en = naming.fill_prompt(
+            "{weather_name}|{weather_en}|{weather_cn}|{solarterm_name}|{solarterm_en}|{solarterm_cn}|{temp}|{city}",
+            tags, "Hangzhou", "westlake", lang="en")
+        self.assertEqual(out_en, "Rain|Rain|雨|Start of Spring|Start of Spring|立春|20-25|Hangzhou")
+        out_zh = naming.fill_prompt("{weather_name}|{solarterm_name}", tags, "杭州", "westlake", lang="zh")
+        self.assertEqual(out_zh, "雨|立春")
+        out_default = naming.fill_prompt("{weather_name}", tags, "x", "y")
+        self.assertEqual(out_default, "Rain")  # 默认英文
+        # 未知占位符原样保留
+        self.assertIn("{no_such}", naming.fill_prompt("{no_such}", tags, "c", "b"))
 
 
 class TestWeatherMaps(unittest.TestCase):
@@ -121,6 +126,46 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.base_stem({"base_image": "West Lake.jpg"}), "west_lake")
         self.assertEqual(config.base_stem({"base_image": "西湖.jpg"}), "wallpaper")
         self.assertEqual(config.base_stem({"base_image": ""}), "wallpaper")
+
+    def test_legacy_prompt_migration(self):
+        import json
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "config.json"
+            f.write_text(json.dumps({"generator": {"prompt": config.LEGACY_PROMPT_ZH}}), encoding="utf-8")
+            with mock.patch("weatherwall.config.config_file", return_value=f):
+                cfg = config.load_config()
+            self.assertEqual(cfg["generator"]["prompt"], config.DEFAULT_PROMPT)
+            # 已自定义的 prompt 不被覆盖
+            f.write_text(json.dumps({"generator": {"prompt": "my own {temp}"}}), encoding="utf-8")
+            with mock.patch("weatherwall.config.config_file", return_value=f):
+                cfg = config.load_config()
+            self.assertEqual(cfg["generator"]["prompt"], "my own {temp}")
+
+
+class TestDisplayI18n(unittest.TestCase):
+    def test_weather_display(self):
+        from weatherwall.weather import weather_display
+        self.assertEqual(weather_display("rain", "en"), "Rain")
+        self.assertEqual(weather_display("rain", "zh"), "雨")
+        self.assertEqual(weather_display("thundershower", "en"), "Thunderstorm")
+
+    def test_solarterm_display(self):
+        from weatherwall.solarterm import solarterm_display
+        self.assertEqual(solarterm_display("colddew", "en"), "Cold Dew")
+        self.assertEqual(solarterm_display("colddew", "zh"), "寒露")
+        self.assertEqual(solarterm_display("springbegin", "zh"), "立春")
+
+    def test_city_picker_data(self):
+        from weatherwall.weather import china_cities, find_china_city
+        cities = china_cities()
+        self.assertTrue(all(c["cn"] and c["en"] and c["code"] for c in cities))
+        self.assertGreater(len(cities), 30)
+        hz = find_china_city("hangzhou")
+        self.assertEqual((hz["cn"], hz["code"]), ("杭州", "101210101"))
+        self.assertEqual(find_china_city("Hangzhou")["cn"], "杭州")
+        self.assertIsNone(find_china_city("Nowhere"))
 
 
 if __name__ == "__main__":

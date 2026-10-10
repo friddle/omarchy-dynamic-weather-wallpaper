@@ -30,7 +30,8 @@ from urllib.parse import parse_qs, urlparse
 
 from . import config, naming, region, wallpaper
 from .app import App
-from .weather import fetch_weather
+from . import net
+from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
 
 SAFE_NAME = re.compile(r"^[^/\\]+$")
 
@@ -93,6 +94,8 @@ def make_handler(app: App) -> type:
                 if url.path in ("/", "/index.html"):
                     page = Path(__file__).parent / "web" / "index.html"
                     self._file(page, "text/html; charset=utf-8")
+                elif url.path == "/api/cities":
+                    self._json({"ok": True, "china": china_cities(), "us": US_CITIES})
                 elif url.path == "/api/status":
                     self._json(app.status())
                 elif url.path == "/api/config":
@@ -157,6 +160,25 @@ def make_handler(app: App) -> type:
                     self._json({"ok": True, "region": r,
                                 "cached": region.region_cache()})
 
+                elif url.path == "/api/locate":
+                    # IP 定位必须直连(不走代理, 否则定位到代理出口)
+                    data = net.http_json(
+                        "http://ip-api.com/json/?fields=status,country,countryCode,city,lat,lon",
+                        timeout=8, proxy="", direct=True)
+                    if data.get("status") != "success":
+                        return self._json({"ok": False, "error": f"locate failed: {data}"}, 502)
+                    city = str(data.get("city") or "")
+                    matched = find_china_city(city) if str(data.get("countryCode")) == "CN" else None
+                    self._json({
+                        "ok": True,
+                        "country": data.get("country"),
+                        "country_code": data.get("countryCode"),
+                        "city": city,
+                        "latitude": data.get("lat"),
+                        "longitude": data.get("lon"),
+                        "china_city": matched,   # 命中内置中国城市表则返回 {cn,en,code}
+                    })
+
                 elif url.path == "/api/test-weather":
                     cfg = config.load_config()
                     reg = region.resolve_region(cfg, force=bool(body.get("force")))
@@ -166,7 +188,8 @@ def make_handler(app: App) -> type:
                     stem = naming.compose_stem(config.base_stem(cfg), tags)
                     cached = naming.find_cached(config.cache_dir(), stem)
                     prompt = naming.fill_prompt(cfg["generator"].get("prompt") or config.DEFAULT_PROMPT,
-                                                tags, info["city"], config.base_stem(cfg))
+                                                tags, info["city"], config.base_stem(cfg),
+                                                lang=str((cfg.get("ui") or {}).get("language") or "en"))
                     self._json({"ok": True, "region": reg, "weather": dict(info),
                                 "tags": tags, "stem": stem, "cached": cached is not None,
                                 "prompt": prompt})

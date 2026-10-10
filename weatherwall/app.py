@@ -95,7 +95,8 @@ class App:
                 cached = False
             if target is None:
                 prompt = naming.fill_prompt(
-                    cfg["generator"].get("prompt") or "", tags, info["city"], base_name)
+                    cfg["generator"].get("prompt") or "", tags, info["city"], base_name,
+                    lang=str((cfg.get("ui") or {}).get("language") or "en"))
                 data, ext = generate.generate_image(
                     cfg["generator"], prompt, base_path,
                     proxy=region_net_proxy(cfg))

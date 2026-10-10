@@ -7,7 +7,18 @@ from pathlib import Path
 
 APP_NAME = "omarchy-dynamic-wallpaper"
 
+# 默认 Prompt(英文)。中文用户可自行在设置页改为中文模板。
 DEFAULT_PROMPT = (
+    "Based on this reference photo, create a stunning desktop wallpaper: "
+    "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
+    "solar term {solarterm_name}, daytime segment {hours}. "
+    "Preserve the original composition, main subject and color palette, "
+    "naturally blending in the weather and seasonal atmosphere. "
+    "Photorealistic, rich details, no text or watermark."
+)
+
+# 旧版中文默认 Prompt(升级时自动替换为新的英文默认)
+LEGACY_PROMPT_ZH = (
     "以这张基准照片为基础创作一张精美的桌面壁纸：当前天气为{weather_cn}，"
     "气温约{temp}℃（{temp_min}~{temp_max}℃），节气为{solarterm_cn}，时段为{hours}。"
     "保持原图的构图、主体与色调风格，自然地融入上述天气、温度与季节氛围，"
@@ -49,6 +60,9 @@ DEFAULT_CONFIG = {
     "server": {"host": "127.0.0.1", "port": 8765},
     "wallpaper": {"apply": True},
     "base_image": "",             # base_images/ 下的文件名
+    "ui": {
+        "language": "en",         # 展示语言: en(默认) / zh
+    },
 }
 
 
@@ -111,6 +125,9 @@ def load_config() -> dict:
                     dst[k] = v
 
         merge(cfg, user)
+        # 升级迁移: 旧中文默认 Prompt 自动换成新的英文默认
+        if cfg["generator"].get("prompt") == LEGACY_PROMPT_ZH:
+            cfg["generator"]["prompt"] = DEFAULT_PROMPT
     return cfg
 
 

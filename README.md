@@ -36,15 +36,16 @@ open http://127.0.0.1:8765
 
 ## 设置后台 (http://127.0.0.1:8765)
 
-| 功能 | 说明 |
+界面默认英文，可一键切换中文（右上角 EN / 中文）。按功能分四个 Tab：
+
+| Tab | 内容 |
 |---|---|
-| 上传基准图 | AI 生图的底图，文件名即生成壁纸名前缀，支持多张、点击切换生效 |
-| 配置中国/国外 | `auto`（初始化自动探测）/ `china` / `global`，随时可改 |
-| 配置城市 | 中文或拼音（hangzhou / 上海），itboy 也支持直接填 9 位城市码 |
-| 配置刷新时间 | 分钟级，改完下轮生效 |
-| 生图配置 | 远程服务器地址 (Base URL) + OpenAI Key + 模型 + Prompt 模板 |
-| HTTP 代理 | 国外环境可配 `http://10.10.32.8:7890`，所有出站请求走代理 |
-| 壁纸库 | 已生成壁纸网格，点击立即应用；右键删除基准图 |
+| Status | 运行状态 + 常用操作（立即刷新 / 强制重新生图 / 探测通道 / 测试天气）+ 日志 |
+| Base & AI | 上传/管理基准图（点击生效、右键删除）+ 生图配置（Base URL / Key / 模型 / Prompt） |
+| Advanced | 分步引导：① 网络通道+代理 ② 天气源+城市（选 QWeather/OpenWeatherMap 才显示 Key 输入框，附获取步骤）③ 刷新与命名规则 ④ 显示语言 |
+| Gallery | 已生成壁纸网格，点击立即应用 |
+
+城市选择：先选国家（中国 41 城 / 美国 20 城 / 其他自定义），再选城市；支持 **IP 自动定位**（走 ip-api，强制直连不经代理）。中国城市会自动带上 itboy 城市码，国外城市走 open-meteo geocoding。
 
 ## 文件命名规则（懒加载缓存键）
 
@@ -110,7 +111,7 @@ python3 -m unittest discover -s tests  # 单元测试
 | `~/.cache/omarchy-dynamic-wallpaper/wallpapers/` | 生成的壁纸库（懒加载缓存） |
 | `~/.cache/omarchy-dynamic-wallpaper/state.json` | 运行状态（含区域探测缓存） |
 
-配置见 `config.example.json`；Prompt 模板占位符：`{weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_cn} {solarterm} {city}`。
+配置见 `config.example.json`；Prompt 模板默认英文（可改中文），多语言占位符：`{weather_name}` `{weather_en}` `{weather_cn}` `{weather}` `{temp}` `{temp_min}` `{temp_max}` `{hours}` `{solarterm_name}` `{solarterm_en}` `{solarterm_cn}` `{solarterm}` `{city}`（`*_name` 跟随界面语言输出）。
 
 > API Key 只保存在本机配置文件中，设置后台仅绑定 127.0.0.1，请勿随意端口转发。
 

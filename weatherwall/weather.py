@@ -65,6 +65,16 @@ WEATHER_TAG_CN = {
     "heavyrain": "大雨", "snow": "雪", "thundershower": "雷阵雨", "wind": "大风",
 }
 
+WEATHER_TAG_EN = {
+    "sunny": "Sunny", "partlycloudy": "Partly Cloudy", "cloudy": "Cloudy", "overcast": "Overcast",
+    "fog": "Fog", "haze": "Haze", "drizzle": "Drizzle", "rain": "Rain",
+    "heavyrain": "Heavy Rain", "snow": "Snow", "thundershower": "Thunderstorm", "wind": "Windy",
+}
+
+
+def weather_display(tag: str, lang: str = "en") -> str:
+    return WEATHER_TAG_EN.get(tag, tag) if lang == "en" else WEATHER_TAG_CN.get(tag, tag)
+
 
 def _wmo_to_tag(code: int) -> str:
     """WMO weather code -> 统一标签。"""
@@ -300,7 +310,7 @@ def _fetch_open_meteo(cfg: dict, proxy: str) -> WeatherInfo:
     info = WeatherInfo(
         provider="open-meteo",
         tag=tag,
-        desc=WEATHER_TAG_CN.get(tag, str(code)),
+        desc=weather_display(tag, "en"),
         temp_current=float(cur["temperature_2m"]),
         temp_min=float(daily["temperature_2m_min"][0]),
         temp_max=float(daily["temperature_2m_max"][0]),
@@ -320,6 +330,39 @@ PROVIDERS = {
 
 # 需要填 key 的天气源(设置页提示用)
 KEY_REQUIRED_PROVIDERS = {"qweather", "openweathermap"}
+
+# 美国主要城市(open-meteo geocoding 按城市名解析)
+US_CITIES = [
+    "New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia",
+    "San Antonio", "San Diego", "Dallas", "Austin", "San Jose", "San Francisco",
+    "Seattle", "Denver", "Boston", "Miami", "Atlanta", "Las Vegas", "Portland",
+    "Washington",
+]
+
+
+def china_cities() -> list[dict]:
+    """从 CITY_CODES 去重生成 [{cn, en, code}] 供设置页选择。"""
+    seen: dict[str, dict] = {}
+    for key, code in CITY_CODES.items():
+        is_cn = any(ord(c) > 127 for c in key)
+        if code in seen:
+            if is_cn:
+                seen[code]["cn"] = key
+            else:
+                seen[code]["en"] = key.capitalize()
+        else:
+            seen[code] = {"cn": key if is_cn else "", "en": "" if is_cn else key.capitalize(),
+                          "code": code}
+    return [v for v in seen.values()]
+
+
+def find_china_city(city: str) -> dict | None:
+    """按中文名/英文名匹配内置中国城市。"""
+    c = city.strip().lower()
+    for item in china_cities():
+        if c in (item["cn"], item["en"].lower()):
+            return item
+    return None
 
 
 def provider_chain(cfg: dict, region: str) -> list[str]:

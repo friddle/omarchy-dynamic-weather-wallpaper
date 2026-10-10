@@ -68,10 +68,24 @@ def find_cached(cache_dir: Path, stem: str) -> Path | None:
     return None
 
 
-def fill_prompt(template: str, tags: dict, city: str, base_name: str) -> str:
-    """把占位符填进生图 prompt 模板。"""
+def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str = "en") -> str:
+    """把占位符填进生图 prompt 模板。
+
+    多语言占位符:
+      {weather_name}/{solarterm_name}  按 ui.language 输出
+      {weather_en}/{weather_cn}        固定英文/中文
+      {weather} {solarterm}            文件名标签(tag, 恒为英文)
+    """
+    from .solarterm import solarterm_display
+    from .weather import weather_display
     repl = {
         **tags,
+        "weather_name": weather_display(tags["weather"], lang),
+        "weather_en": weather_display(tags["weather"], "en"),
+        "weather_cn": weather_display(tags["weather"], "zh"),
+        "solarterm_name": solarterm_display(tags["solarterm"], lang),
+        "solarterm_en": solarterm_display(tags["solarterm"], "en"),
+        "solarterm_cn": solarterm_display(tags["solarterm"], "zh"),
         "city": city,
         "base_name": base_name,
     }
