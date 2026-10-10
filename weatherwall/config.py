@@ -186,6 +186,42 @@ def save_config(cfg: dict) -> None:
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def seed_base_image() -> Path | None:
+    """内置默认基准图(随包分发): 湖中小岛。兼容源码与 PyInstaller 冻结环境。"""
+    here = Path(__file__).parent
+    for cand in (here / "seed" / "island.png",):
+        if cand.exists():
+            return cand
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        frozen = Path(meipass) / "weatherwall" / "seed" / "island.png"
+        if frozen.exists():
+            return frozen
+    return None
+
+
+def seed_if_empty() -> bool:
+    """首次运行且未配置任何基准图时, 内置基准图生效。"""
+    try:
+        cfg = load_config()
+        if cfg.get("base_image"):
+            return False
+        bdir = base_images_dir()
+        if bdir.exists() and any(bdir.iterdir()):
+            return False
+        seed = seed_base_image()
+        if seed is None:
+            return False
+        ensure_dirs()
+        target = base_images_dir() / "island.png"
+        target.write_bytes(seed.read_bytes())
+        cfg["base_image"] = target.name
+        save_config(cfg)
+        return True
+    except OSError:
+        return False
+
+
 def active_base_path(cfg: dict) -> Path | None:
     """当前生效的基准图路径；未配置或文件不存在返回 None。"""
     name = (cfg.get("base_image") or "").strip()

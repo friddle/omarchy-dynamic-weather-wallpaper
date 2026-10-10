@@ -30,6 +30,7 @@ jobs:
           --name WeatherDynamic
           --icon assets/icon.ico
           --add-data "weatherwall/web/index.html;weatherwall/web"
+          --add-data "weatherwall/seed/island.png;weatherwall/seed"
           winmain.py
 
       - name: Smoke test (run 5s and hit status API)

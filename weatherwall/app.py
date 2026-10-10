@@ -21,6 +21,11 @@ class App:
         self.state: dict = {"log": []}
         self._load_state()
         try:
+            if config.seed_if_empty():         # 首次运行: 内置基准图生效
+                self.log("首次运行: 内置基准图 island.png 已生效")
+        except OSError:
+            pass
+        try:
             moved = config.migrate_wallpaper_cache()  # 旧扁平结构 -> 按基准图分目录
             if moved:
                 self.log(f"壁纸库迁移: {moved} 张已按基准图分目录")

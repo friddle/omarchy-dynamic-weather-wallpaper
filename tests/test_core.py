@@ -85,6 +85,26 @@ class TestNaming(unittest.TestCase):
             self.assertIsNotNone(hit)
             self.assertEqual(hit.suffix, ".jpg")
 
+    def test_seed_base_image(self):
+        from weatherwall import config as cfg_mod
+        seed = cfg_mod.seed_base_image()
+        self.assertIsNotNone(seed)  # 仓库内置 weatherwall/seed/island.png
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            with mock.patch.object(cfg_mod, "config_dir", return_value=root / "cfg"), \
+                 mock.patch.object(cfg_mod, "base_images_dir", return_value=root / "cfg" / "base_images"), \
+                 mock.patch.object(cfg_mod, "config_file", return_value=root / "cfg" / "config.json"):
+                self.assertTrue(cfg_mod.seed_if_empty())       # 首次: 生效
+                cfg = cfg_mod.load_config()
+                self.assertEqual(cfg["base_image"], "island.png")
+                self.assertTrue((root / "cfg" / "base_images" / "island.png").exists())
+                self.assertFalse(cfg_mod.seed_if_empty())      # 二次: 不重复
+                # 已有基准图时也不覆盖
+                cfg["base_image"] = ""
+                cfg_mod.save_config(cfg)
+                (root / "cfg" / "base_images" / "mine.jpg").write_bytes(b"x")
+                self.assertFalse(cfg_mod.seed_if_empty())
+
     def test_wallpaper_cache_migration(self):
         from weatherwall import config as cfg_mod
         with tempfile.TemporaryDirectory() as td:

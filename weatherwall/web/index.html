@@ -417,7 +417,7 @@ en:{
  disp_load:"Refresh Display List",disp_empty:"Click refresh to load displays",
  disp_all:"All displays",disp_count:" displays",disp_saved:"Display settings saved",
  save:"Save",
- t_saved:"Saved",t_gen_q:"Generating in the background — check the Status tab shortly",t_gen_ok:"Done",
+ t_key_required:"API Key is required before saving",t_saved:"Saved",t_gen_q:"Generating in the background — check the Status tab shortly",t_gen_ok:"Done",
  t_located:"Located: ",t_locate_fail:"Locate failed: ",t_no_base:"No base images yet — upload one first",
  t_no_walls:"No wallpapers yet — click Refresh Now",t_cache_hit:"cache hit",t_new:"new",t_confirm_force:"Regenerate the current wallpaper via AI? The cached image will be replaced.",
  t_apply_ok:"Applied: ",t_detect_none:"network unreachable",
@@ -465,7 +465,7 @@ zh:{
  disp_load:"刷新显示器列表",disp_empty:"点击刷新加载显示器",
  disp_all:"全部显示器",disp_count:" 块",disp_saved:"显示器设置已保存",
  save:"保存",
- t_saved:"已保存",t_gen_q:"正在后台生成，稍后可在状态页查看",t_gen_ok:"完成",
+ t_key_required:"请先填写 API Key 再保存",t_saved:"已保存",t_gen_q:"正在后台生成，稍后可在状态页查看",t_gen_ok:"完成",
  t_located:"定位到：",t_locate_fail:"定位失败：",t_no_base:"还没有基准图，先上传一张",
  t_no_walls:"还没有壁纸，点「立即刷新」生成",t_cache_hit:"缓存命中",t_new:"新生成",t_confirm_force:"确定重新生成当前壁纸？将调用 AI 并替换缓存图片。",
  t_apply_ok:"已应用：",t_detect_none:"网络不可用",
@@ -761,11 +761,20 @@ function fillForm(cfg){
   LANG=cfg.ui?.language||'en';$('cfg-lang').value=LANG;
   applyI18n();
 }
-$('btn-save-gen').onclick=async()=>{try{await api('/api/config',{config:{generator:{
-  base_url:$('gen-base-url').value.trim()||'https://api.openai.com/v1',
-  api_key:$('gen-key').value.trim(),model:$('gen-model').value.trim()||'gpt-image-1',
-  size:$('gen-size').value,prompt:$('gen-prompt').value}}});
-  toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
+$('btn-save-gen').onclick=async()=>{
+  if(!$('gen-key').value.trim()){
+    $('gen-key').style.borderColor='var(--err)';
+    $('gen-key').focus();
+    toast(t('t_key_required'),true);
+    setTimeout(()=>$('gen-key').style.borderColor='',2400);
+    return;
+  }
+  try{await api('/api/config',{config:{generator:{
+    base_url:$('gen-base-url').value.trim()||'https://api.openai.com/v1',
+    api_key:$('gen-key').value.trim(),model:$('gen-model').value.trim()||'gpt-image-1',
+    size:$('gen-size').value,prompt:$('gen-prompt').value}}});
+    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
+$('gen-key').oninput=()=>{$('gen-key').style.borderColor='';};
 $('btn-save-weather').onclick=async()=>{try{await api('/api/config',{config:{weather:collectWeather(),
   region:$('cfg-region').value,network:{proxy:$('cfg-proxy').value.trim()}}});
   toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
