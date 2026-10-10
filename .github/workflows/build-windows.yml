@@ -73,7 +73,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/WeatherDynamic.exe
-          prerelease: true
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           generate_release_notes: false
           body: |
             **WeatherDynamic Windows 测试版**
