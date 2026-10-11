@@ -171,7 +171,8 @@ DEFAULT_CONFIG = {
         "bg_opacity": 0.55,       # 挂件背景不透明度 0~1
         "scale": 0.3,             # 字号缩放 0.2~2.0, 0.3 即 4K 图上基准字号约 34px
         "position": {"x": 0.94, "y": 0.08},  # 挂件盒中心(相对图片 0~1), 默认右上角; banner 固定底部
-        "fields": [               # 字段模板行, 占位符可自由编辑替换/增删/排序
+        "fields": [               # 字段模板行, 占位符可自由编辑替换/增删/排序; {icon} 为天气图标
+            "{icon}",
             "{city}",
             "{weather_name} · {temp}°C ({temp_min}~{temp_max}°C)",
             "{solarterm_name} · {time}",

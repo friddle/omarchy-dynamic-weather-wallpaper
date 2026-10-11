@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .weather import weather_display
+from .weather import weather_display, WEATHER_ICON
 from .solarterm import solarterm_display
 
 
@@ -69,6 +69,7 @@ def build_repl(info: dict, tags: dict, now: datetime.datetime, lang: str = "en")
         "solarterm_name": solarterm_display(tags["solarterm"], lang),
         "solarterm_en": solarterm_display(tags["solarterm"], "en"),
         "solarterm_cn": solarterm_display(tags["solarterm"], "zh"),
+        "icon": WEATHER_ICON.get(str(tags.get("weather") or ""), ""),
         "city": str(info.get("city") or ""),
         "temp": _fmt_temp(info.get("temp_current")),
         "temp_min": _fmt_temp(info.get("temp_min")),
@@ -130,6 +131,89 @@ def find_font() -> str | None:
     return None
 
 
+# ---------- 图标字体({icon} 行专用; 需覆盖天气符号字形) ----------
+
+_ICON_FONT_CANDIDATES = [
+    "/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf",
+    "/usr/share/fonts/noto/NotoSansSymbols2*.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansSymbols2*.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansSymbols2.ttf",
+    "C:\\Windows\\Fonts\\seguisym.ttf",       # Windows: Segoe UI Symbol
+    "/System/Library/Fonts/Apple Symbols.ttf",  # macOS
+    "/System/Library/Fonts/Symbol.ttf",
+]
+
+
+def font_covers(font: str, chars) -> bool:
+    """字体 cmap 覆盖检查(TTC/TTF, 支持 cmap format 4/12), 纯标准库。"""
+    try:
+        data = Path(font).read_bytes()
+    except OSError:
+        return False
+    if len(data) < 12:
+        return False
+    offs = [0]
+    if data[:4] == b"ttcf" and len(data) >= 16:
+        n = struct.unpack(">I", data[8:12])[0]
+        offs = [struct.unpack(">I", data[12 + 4 * i:16 + 4 * i])[0]
+                for i in range(min(n, 16)) if 16 + 4 * i <= len(data)]
+    want = {ord(c) for c in chars}
+    have: set[int] = set()
+    for off in offs:
+        try:
+            if off + 6 > len(data):
+                continue
+            numTables = struct.unpack(">H", data[off + 4:off + 6])[0]
+            for i in range(numTables):
+                rec = off + 12 + 16 * i
+                if rec + 16 > len(data) or data[rec:rec + 4] != b"cmap":
+                    continue
+                sub_off = struct.unpack(">I", data[rec + 8:rec + 12])[0]
+                n = struct.unpack(">H", data[off + sub_off + 2:off + sub_off + 4])[0]
+                for j in range(n):
+                    _, _, oj = struct.unpack(">HHI",
+                        data[off + sub_off + 4 + 8 * j:off + sub_off + 12 + 8 * j])
+                    so = off + sub_off + oj
+                    if so + 2 > len(data):
+                        continue
+                    fmt = struct.unpack(">H", data[so:so + 2])[0]
+                    if fmt == 4:
+                        segX2 = struct.unpack(">H", data[so + 6:so + 8])[0]
+                        seg = segX2 // 2
+                        if seg == 0 or so + 16 + 2 * segX2 > len(data):
+                            continue
+                        ends = struct.unpack(f">{seg}H", data[so + 14:so + 14 + segX2])
+                        starts = struct.unpack(f">{seg}H", data[so + 16 + segX2:so + 16 + 2 * segX2])
+                        for s, e in zip(starts, ends):
+                            have.update(range(s, e + 1))
+                    elif fmt == 12:
+                        n12 = struct.unpack(">I", data[so + 12:so + 16])[0]
+                        p = so + 16
+                        for _ in range(n12):
+                            if p + 12 > len(data):
+                                break
+                            s, e, _g = struct.unpack(">III", data[p:p + 12])
+                            p += 12
+                            have.update(range(s, e + 1))
+        except (struct.error, IndexError):
+            continue
+    return want <= have
+
+
+def find_icon_font(chars) -> str | None:
+    """返回能覆盖全部所给字形的符号字体路径; 找不到返回 None。"""
+    import glob as _glob
+    seen: list[str] = []
+    for cand in _ICON_FONT_CANDIDATES:
+        for f in (_glob.glob(cand) or [cand]):
+            if f not in seen:
+                seen.append(f)
+    for f in seen:
+        if Path(f).exists() and font_covers(f, chars):
+            return f
+    return None
+
+
 # ---------- 布局(纯计算, 便于测试) ----------
 
 def _char_em(ch: str) -> float:
@@ -186,6 +270,7 @@ def _fesc(path) -> str:
 
 
 def _drawtext(row: dict, font: str, tf: str, minimal: bool) -> str:
+    font = row.get("font") or font
     parts = [f"drawtext=fontfile={_fesc(font)}",
              f"textfile={_fesc(tf)}",
              f"fontsize={row['fontsize']}",
@@ -276,6 +361,19 @@ def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
 
     img_w, img_h = _probe_size(data)
     lay = layout(lines, img_w, img_h, wcfg)
+    # 图标行: 用符号字体渲染; 找不到覆盖的字体则丢弃图标行
+    icon_set = set(WEATHER_ICON.values())
+    icon_lines = {ln for ln in lines if ln in icon_set}
+    if icon_lines:
+        icon_font = find_icon_font(icon_lines)
+        if icon_font:
+            for row in lay["rows"]:
+                if row["text"] in icon_lines:
+                    row["font"] = icon_font
+        else:
+            lay["rows"] = [r for r in lay["rows"] if r["text"] not in icon_lines]
+            if not lay["rows"]:
+                raise WidgetError("挂件内容为空")
     with tempfile.TemporaryDirectory(prefix="weatherwall-wg-") as td:
         tdir = Path(td)
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",

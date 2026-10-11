@@ -393,6 +393,26 @@ class TestWidget(unittest.TestCase):
             if style == "minimal":
                 self.assertNotIn("drawbox", " ".join(args))
 
+    def test_weather_icon_map_and_fill(self):
+        import datetime as dt
+        from weatherwall import widget
+        from weatherwall.weather import WEATHER_ICON, WEATHER_TAG_CN
+        # 每种天气都有图标映射
+        self.assertEqual(set(WEATHER_ICON), set(WEATHER_TAG_CN))
+        info = {"city": "x", "temp_current": 1, "temp_min": 0, "temp_max": 2}
+        tags = {"weather": "sunny", "hours": "1200", "temp": "0-5", "temp_value": 1,
+                "temp_min": 0, "temp_max": 2, "solarterm": "colddew"}
+        lines = widget.fill_lines(["{icon}", "{weather_name}"], info, tags,
+                                  dt.datetime(2026, 10, 11, 12, 0), "en")
+        self.assertEqual(lines, ["☀", "Sunny"])
+
+    def test_icon_font_covers(self):
+        from weatherwall import widget
+        font = widget.find_icon_font("☀☁☂❄⛈☈☔⛅")
+        if font is None:
+            self.skipTest("系统无覆盖天气符号的图标字体")
+        self.assertTrue(widget.font_covers(font, "☀⛅"))
+
 
 class TestDaypart(unittest.TestCase):
     def test_daypart_of(self):

@@ -71,6 +71,14 @@ WEATHER_TAG_EN = {
     "heavyrain": "Heavy Rain", "snow": "Snow", "thundershower": "Thunderstorm", "wind": "Windy",
 }
 
+# 天气 -> 符号字形(挂件 {icon} 占位符用; 由 Noto Sans Symbols2 / Segoe UI Symbol
+# 等符号字体渲染, 渲染时按字体覆盖自动过滤, 不支持的字形整行省略)
+WEATHER_ICON = {
+    "sunny": "☀", "partlycloudy": "⛅", "cloudy": "☁", "overcast": "☁",
+    "fog": "☁", "haze": "☁", "drizzle": "☂", "rain": "☂",
+    "heavyrain": "☔", "snow": "❄", "thundershower": "☈", "wind": "☁",
+}
+
 
 def weather_display(tag: str, lang: str = "en") -> str:
     return WEATHER_TAG_EN.get(tag, tag) if lang == "en" else WEATHER_TAG_CN.get(tag, tag)
