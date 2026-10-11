@@ -59,6 +59,19 @@ SOLARTERM_EN = {
 
 SOLARTERM_CN = {en: cn for cn, en, _, _ in TERMS}
 
+# 节气 -> 符号字形(挂件 {solarterm_icon} 占位符; 按季节气候近似:
+# 春分/秋分用 ☼, 雨水/谷雨/芒种 ☂, 惊蛰 ⚡, 夏季 ☀, 秋 ⛅☁, 冬/霜 ❄)
+SOLARTERM_ICON = {
+    "minorcold": "❄", "majorcold": "❄",
+    "springbegin": "⛅", "rainwater": "☂", "insectsawaken": "⚡",
+    "springequinox": "☼", "clearandbright": "☼", "grainrain": "☂",
+    "summerbegin": "☀", "grainbuds": "☀", "graininear": "☂", "summersolstice": "☀",
+    "minorheat": "☀", "majorheat": "☀",
+    "autumnbegin": "⛅", "endofheat": "⛅", "whitedew": "☁", "autumnequinox": "☼",
+    "colddew": "☁", "frostfall": "❄",
+    "winterbegin": "❄", "minorsnow": "❄", "majorsnow": "❄", "wintersolstice": "❄",
+}
+
 
 def solarterm_display(en_tag: str, lang: str = "en") -> str:
     return SOLARTERM_EN.get(en_tag, en_tag) if lang == "en" else SOLARTERM_CN.get(en_tag, en_tag)

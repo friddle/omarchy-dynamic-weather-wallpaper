@@ -397,14 +397,20 @@ class TestWidget(unittest.TestCase):
         import datetime as dt
         from weatherwall import widget
         from weatherwall.weather import WEATHER_ICON, WEATHER_TAG_CN
-        # 每种天气都有图标映射
+        from weatherwall.solarterm import SOLARTERM_ICON, TERMS
+        # 每种天气都有图标映射; 24 节气都有图标
         self.assertEqual(set(WEATHER_ICON), set(WEATHER_TAG_CN))
+        self.assertEqual(set(SOLARTERM_ICON), {en for _, en, _, _ in TERMS})
         info = {"city": "x", "temp_current": 1, "temp_min": 0, "temp_max": 2}
         tags = {"weather": "sunny", "hours": "1200", "temp": "0-5", "temp_value": 1,
                 "temp_min": 0, "temp_max": 2, "solarterm": "colddew"}
-        lines = widget.fill_lines(["{icon}", "{weather_name}"], info, tags,
+        lines = widget.fill_lines(["{weather_icon}", "{solarterm_icon}", "{weather_name}"],
+                                  info, tags, dt.datetime(2026, 10, 11, 12, 0), "en")
+        self.assertEqual(lines, ["☀", "☁", "Sunny"])
+        # 旧名 {icon} 仍兼容
+        lines = widget.fill_lines(["{icon}"], info, tags,
                                   dt.datetime(2026, 10, 11, 12, 0), "en")
-        self.assertEqual(lines, ["☀", "Sunny"])
+        self.assertEqual(lines, ["☀"])
 
     def test_icon_font_covers(self):
         from weatherwall import widget

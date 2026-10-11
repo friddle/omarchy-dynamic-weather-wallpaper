@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from .weather import weather_display, WEATHER_ICON
-from .solarterm import solarterm_display
+from .solarterm import solarterm_display, SOLARTERM_ICON
 
 
 class WidgetError(Exception):
@@ -60,7 +60,9 @@ def fit_to(data: bytes, width: int, height: int) -> tuple[bytes, str]:
 # ---------- 字段模板填充 ----------
 
 def build_repl(info: dict, tags: dict, now: datetime.datetime, lang: str = "en") -> dict:
-    """挂件模板可用占位符。{temp} 是当前温度(与 prompt 模板一致), 另加时间日期。"""
+    """挂件模板可用占位符。{temp} 是当前温度(与 prompt 模板一致), 另加时间日期与图标。"""
+    weather_icon = WEATHER_ICON.get(str(tags.get("weather") or ""), "")
+    solarterm_icon = SOLARTERM_ICON.get(str(tags.get("solarterm") or ""), "")
     return {
         **tags,
         "weather_name": weather_display(tags["weather"], lang),
@@ -69,7 +71,9 @@ def build_repl(info: dict, tags: dict, now: datetime.datetime, lang: str = "en")
         "solarterm_name": solarterm_display(tags["solarterm"], lang),
         "solarterm_en": solarterm_display(tags["solarterm"], "en"),
         "solarterm_cn": solarterm_display(tags["solarterm"], "zh"),
-        "icon": WEATHER_ICON.get(str(tags.get("weather") or ""), ""),
+        "weather_icon": weather_icon,
+        "icon": weather_icon,  # 旧名兼容
+        "solarterm_icon": solarterm_icon,
         "city": str(info.get("city") or ""),
         "temp": _fmt_temp(info.get("temp_current")),
         "temp_min": _fmt_temp(info.get("temp_min")),
@@ -227,15 +231,40 @@ def _text_width(text: str, fontsize: int) -> int:
     return int(sum(_char_em(c) for c in text) * fontsize)
 
 
-def layout(lines: list[str], img_w: int, img_h: int, wcfg: dict) -> dict:
-    """计算挂件盒与每行文本的位置。返回 px 坐标, 供各后端共用。"""
+def _split_runs(text: str, icon_glyphs: set) -> list[tuple[str, bool]]:
+    """把一行按 图标字形/普通文字 切成连续段: [(text, is_icon)]。"""
+    runs: list[list] = []
+    for ch in text:
+        is_icon = ch in icon_glyphs
+        if runs and runs[-1][1] == is_icon:
+            runs[-1][0] += ch
+        else:
+            runs.append([ch, is_icon])
+    return [(t, i) for t, i in runs]
+
+
+def layout(lines: list[str], img_w: int, img_h: int, wcfg: dict,
+           icon_glyphs: set | None = None, icon_font: str | None = None) -> dict:
+    """计算挂件盒与每行各文字/图标段的位置。返回 px 坐标, 供各后端共用。"""
+    icon_glyphs = icon_glyphs or set()
     scale = max(0.1, min(3.0, float(wcfg.get("scale") or 0.3)))
     base = max(16, round(img_w / 34 * scale))
     title = round(base * 1.45)
-    sizes = [title] + [base] * (len(lines) - 1)
     pad = round(base * 0.75)
     line_gap = round(base * 0.45)
-    widths = [_text_width(s, sz) for s, sz in zip(lines, sizes)]
+    sizes = [title] + [base] * (len(lines) - 1)
+
+    rows_runs = []
+    widths = []
+    for s, sz in zip(lines, sizes):
+        runs = _split_runs(s, icon_glyphs) if icon_glyphs else [(s, False)]
+        runs = [{"text": t, "is_icon": i,
+                 "font": icon_font if (i and icon_font) else None} for t, i in runs]
+        w = sum(round(len(r["text"]) * sz * 1.05) if r["is_icon"]
+                else _text_width(r["text"], sz) for r in runs)
+        rows_runs.append((s, sz, runs, w))
+        widths.append(w)
+
     heights = [round(sz * 1.18) for sz in sizes]
     box_w = min(img_w - 8, max(widths) + pad * 2)
     box_h = min(img_h - 8, sum(heights) + line_gap * (len(lines) - 1) + pad * 2)
@@ -253,10 +282,16 @@ def layout(lines: list[str], img_w: int, img_h: int, wcfg: dict) -> dict:
             fx, fy = 0.94, 0.08
         bx = min(img_w - box_w, max(0, round(fx * img_w) - box_w // 2))
         by = min(img_h - box_h, max(0, round(fy * img_h) - box_h // 2))
+
     rows = []
     y = by + pad
-    for s, sz, w, h in zip(lines, sizes, widths, heights):
-        rows.append({"text": s, "x": bx + pad, "y": y, "fontsize": sz})
+    for (s, sz, runs, w), h in zip(rows_runs, heights):
+        x = bx + pad
+        for run in runs:
+            run["x"] = x
+            x += round(len(run["text"]) * sz * 1.05) if run["is_icon"] \
+                else _text_width(run["text"], sz)
+        rows.append({"text": s, "runs": runs, "x": bx + pad, "y": y, "fontsize": sz})
         y += h + line_gap
     return {"box": [bx, by, box_w, box_h], "pad": pad, "rows": rows}
 
@@ -269,13 +304,13 @@ def _fesc(path) -> str:
     return s.replace("\\", "\\\\").replace(":", "\\:")
 
 
-def _drawtext(row: dict, font: str, tf: str, minimal: bool) -> str:
-    font = row.get("font") or font
-    parts = [f"drawtext=fontfile={_fesc(font)}",
+def _drawtext(row: dict, run: dict, font: str, tf: str, minimal: bool) -> str:
+    use = run.get("font") or font
+    parts = [f"drawtext=fontfile={_fesc(use)}",
              f"textfile={_fesc(tf)}",
              f"fontsize={row['fontsize']}",
              "fontcolor=white@0.96",
-             f"x={row['x']}", f"y={row['y']}",
+             f"x={run['x']}", f"y={row['y']}",
              "expansion=none"]
     if minimal:
         parts += ["shadowcolor=black@0.55", "shadowx=2", "shadowy=2"]
@@ -290,13 +325,14 @@ def _ffargs(lay: dict, wcfg: dict, font: str, tdir: Path, img_w: int) -> list[st
         op = 0.55
     bx, by, bw, bh = lay["box"]
     texts = []
-    for i, row in enumerate(lay["rows"]):
-        tf = tdir / f"line{i}.txt"
-        tf.write_text(row["text"], encoding="utf-8")
-        texts.append(tf)
+    for row in lay["rows"]:
+        for si, run in enumerate(row["runs"]):
+            tf = tdir / f"line{row['y']}_{si}.txt"
+            tf.write_text(run["text"], encoding="utf-8")
+            texts.append((row, run, tf))
     minimal = style == "minimal"
-    dt = ",".join(_drawtext(row, font, texts[i], minimal)
-                  for i, row in enumerate(lay["rows"]))
+    dt = ",".join(_drawtext(row, run, font, tf, minimal)
+                  for row, run, tf in texts)
 
     if minimal:  # 无背景, 仅阴影文字
         return ["-vf", dt]
@@ -360,20 +396,16 @@ def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
         raise WidgetError("未找到可用字体文件")
 
     img_w, img_h = _probe_size(data)
-    lay = layout(lines, img_w, img_h, wcfg)
-    # 图标行: 用符号字体渲染; 找不到覆盖的字体则丢弃图标行
-    icon_set = set(WEATHER_ICON.values())
-    icon_lines = {ln for ln in lines if ln in icon_set}
-    if icon_lines:
-        icon_font = find_icon_font(icon_lines)
-        if icon_font:
-            for row in lay["rows"]:
-                if row["text"] in icon_lines:
-                    row["font"] = icon_font
-        else:
-            lay["rows"] = [r for r in lay["rows"] if r["text"] not in icon_lines]
-            if not lay["rows"]:
-                raise WidgetError("挂件内容为空")
+    # 图标字形({weather_icon}/{solarterm_icon}): 用符号字体渲染; 无字体则剔除
+    icon_glyphs = set(WEATHER_ICON.values()) | set(SOLARTERM_ICON.values())
+    used = {ch for ln in lines for ch in ln if ch in icon_glyphs}
+    icon_font = find_icon_font(used) if used else None
+    if used and icon_font is None:
+        lines = ["".join(ch for ch in ln if ch not in icon_glyphs) for ln in lines]
+        lines = [ln for ln in lines if ln.strip()]
+        if not lines:
+            raise WidgetError("挂件内容为空")
+    lay = layout(lines, img_w, img_h, wcfg, icon_glyphs, icon_font)
     with tempfile.TemporaryDirectory(prefix="weatherwall-wg-") as td:
         tdir = Path(td)
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",

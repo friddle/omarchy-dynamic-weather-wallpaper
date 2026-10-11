@@ -467,7 +467,7 @@ en:{
  wg_preview:"Preview (drag the widget to set position)",
  wg_drag_hint:"Drag the widget inside the preview to set its position; banner style is pinned to the bottom.",
  wg_fields:"Field lines (edit / replace / reorder / add your own)",wg_add:"Add line",
- wg_ph_hint:"Placeholders: {icon} {city} {weather_name} {temp} {temp_min} {temp_max} {solarterm_name} {time} {date} {hours} — anything else is shown as-is (write your own quotes). {icon} needs a symbol font (e.g. Noto Sans Symbols2).",
+ wg_ph_hint:"Variables — weather: {weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} · solar term: {solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm} · time: {time} {date} · place: {city}. Free text allowed. Icons need a symbol font (Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols).",
  wg_need_ffmpeg:"ffmpeg not found — widget disabled",
  run_status:"Run Status",st_platform:"Platform / Version",st_region:"Network Channel",
  st_weather:"Weather",st_tags:"Tags (weather / hours / temp / solar term)",st_file:"Target File",
@@ -528,7 +528,7 @@ zh:{
  wg_preview:"预览(拖动挂件设置位置)",
  wg_drag_hint:"在预览图中拖动挂件设置位置；横幅样式固定底部。",
  wg_fields:"字段行(可编辑 / 替换 / 排序 / 添加自定义话语)",wg_add:"添加一行",
- wg_ph_hint:"占位符：{icon} {city} {weather_name} {temp} {temp_min} {temp_max} {solarterm_name} {time} {date} {hours} —— 其余文字原样显示，可自由添加话语。{icon} 为天气图标，需系统有符号字体(如 Noto Sans Symbols2)。",
+ wg_ph_hint:"可用变量 —— 天气：{weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours}；节气：{solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm}；时间：{time} {date}；地点：{city}。其余文字原样显示，可自由添加话语。图标需系统有符号字体(Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols)。",
  wg_need_ffmpeg:"未找到 ffmpeg，挂件不可用",
  run_status:"运行状态",st_platform:"平台 / 版本",st_region:"网络通道",
  st_weather:"天气",st_tags:"标签 (天气 / 时段 / 温度 / 节气)",st_file:"目标文件",
@@ -583,6 +583,9 @@ const WX_NAME={en:{sunny:"Sunny",partlycloudy:"Partly Cloudy",cloudy:"Cloudy",ov
 zh:{sunny:"晴",partlycloudy:"晴间多云",cloudy:"多云",overcast:"阴",fog:"雾",haze:"霾",drizzle:"小雨",rain:"雨",heavyrain:"大雨",snow:"雪",thundershower:"雷阵雨",wind:"大风"}};
 const ST_NAME={en:{minorcold:"Minor Cold",majorcold:"Major Cold",springbegin:"Start of Spring",rainwater:"Rain Water",insectsawaken:"Insects Awaken",springequinox:"Spring Equinox",clearandbright:"Pure Brightness",grainrain:"Grain Rain",summerbegin:"Start of Summer",grainbuds:"Grain Buds",graininear:"Grain in Ear",summersolstice:"Summer Solstice",minorheat:"Minor Heat",majorheat:"Major Heat",autumnbegin:"Start of Autumn",endofheat:"End of Heat",whitedew:"White Dew",autumnequinox:"Autumn Equinox",colddew:"Cold Dew",frostfall:"Frost's Descent",winterbegin:"Start of Winter",minorsnow:"Minor Snow",majorsnow:"Major Snow",wintersolstice:"Winter Solstice"},
 zh:{minorcold:"小寒",majorcold:"大寒",springbegin:"立春",rainwater:"雨水",insectsawaken:"惊蛰",springequinox:"春分",clearandbright:"清明",grainrain:"谷雨",summerbegin:"立夏",grainbuds:"小满",graininear:"芒种",summersolstice:"夏至",minorheat:"小暑",majorheat:"大暑",autumnbegin:"立秋",endofheat:"处暑",whitedew:"白露",autumnequinox:"秋分",colddew:"寒露",frostfall:"霜降",winterbegin:"立冬",minorsnow:"小雪",majorsnow:"大雪",wintersolstice:"冬至"}};
+/* 天气/节气图标(与后端 WEATHER_ICON/SOLARTERM_ICON 保持一致) */
+const WX_ICON={sunny:"☀",partlycloudy:"⛅",cloudy:"☁",overcast:"☁",fog:"☁",haze:"☁",drizzle:"☂",rain:"☂",heavyrain:"☔",snow:"❄",thundershower:"☈",wind:"☁"};
+const ST_ICON={minorcold:"❄",majorcold:"❄",springbegin:"⛅",rainwater:"☂",insectsawaken:"⚡",springequinox:"☼",clearandbright:"☼",grainrain:"☂",summerbegin:"☀",grainbuds:"☀",graininear:"☂",summersolstice:"☀",minorheat:"☀",majorheat:"☀",autumnbegin:"⛅",endofheat:"⛅",whitedew:"☁",autumnequinox:"☼",colddew:"☁",frostfall:"❄",winterbegin:"❄",minorsnow:"❄",majorsnow:"❄",wintersolstice:"❄"};
 
 let LANG='en';
 const t=k=>I18N[LANG][k]??I18N.en[k]??k;
@@ -954,9 +957,14 @@ function wgSample(){
   const w=ST_CACHE?.state?.last_weather||{city:LANG==='zh'?'杭州市':'Hangzhou',temp_current:22,temp_min:18,temp_max:28};
   const tg=ST_CACHE?.state?.last_tags||{weather:'cloudy',hours:'1216',temp:'20-25',temp_min:18,temp_max:28,solarterm:'colddew'};
   const n=new Date();
+  const wi=WX_ICON[tg.weather]||'';
+  const si=ST_ICON[tg.solarterm]||'';
   return{city:w.city||'—',temp:Math.round(w.temp_current??0),temp_min:Math.round(w.temp_min??0),
     temp_max:Math.round(w.temp_max??0),weather:tg.weather,weather_name:WX_NAME[LANG][tg.weather]||tg.weather,
+    weather_en:WX_NAME.en[tg.weather]||tg.weather,weather_cn:WX_NAME.zh[tg.weather]||tg.weather,
     hours:tg.hours,solarterm:tg.solarterm,solarterm_name:ST_NAME[LANG][tg.solarterm]||tg.solarterm,
+    solarterm_en:ST_NAME.en[tg.solarterm]||tg.solarterm,solarterm_cn:ST_NAME.zh[tg.solarterm]||tg.solarterm,
+    weather_icon:wi,icon:wi,solarterm_icon:si,
     time:n.toTimeString().slice(0,5),date:n.toISOString().slice(0,10)};
 }
 function wgFillLine(s){const r=wgSample();let out=String(s);for(const k in r)out=out.replaceAll('{'+k+'}',r[k]);return out;}
