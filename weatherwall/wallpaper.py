@@ -1,15 +1,17 @@
-"""壁纸切换：macOS 优先，Windows/Linux(Omarchy-Hyprland) 兼容。支持多显示器选择。
+"""壁纸切换：macOS 优先，Windows/Linux(Omarchy-KDE-GNOME-Hyprland) 兼容。支持多显示器选择。
 
 macOS   : osascript System Events (按 desktop 序号可指定单个显示器/空间)
 Windows : PowerShell SystemParametersInfo(SPI_SETDESKWALLPAPER) — 单显示器
-Linux   : omarchy(Omarchy 背景, 系统级联动) -> swww(Hyprland, -o 指定输出)
-          -> hyprpaper -> gsettings -> feh；每一步都检查结果，失败继续回落
+Linux   : kde(plasma D-Bus 脚本) -> omarchy(Omarchy 背景, 系统级联动)
+          -> swww(Hyprland, -o 指定输出) -> hyprpaper -> gnome(gsettings)
+          -> feh；每一步都检查结果，失败继续回落
 
 displays 参数: "all"(默认) 或 序号列表 [1,3] (对应 /api/displays 返回的 index)
-omarchy/swww 之外注意: Omarchy 系统背景机制作用于全部显示器，不支持按序号选择。
+注意: kde/omarchy/gsettings 机制作用于全部显示器，不支持按序号选择。
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -190,8 +192,70 @@ def _linux_output_names(indices: list[int]) -> list[str]:
         return []
 
 
+def _desktop_env() -> str:
+    """当前桌面环境(小写, 如 kde/gnome); systemd 用户服务下可能为空。"""
+    xdg = (os.environ.get("XDG_CURRENT_DESKTOP") or "").lower()
+    parts = [t for t in xdg.split(":") if t]
+    if os.environ.get("KDE_FULL_SESSION") or "kde" in parts or "plasma" in parts:
+        return "kde"
+    for t in parts:
+        if "gnome" in t:
+            return "gnome"
+    return parts[0] if parts else ""
+
+
+def _kde_script(p: str) -> str:
+    """Plasma scripting API: 给所有桌面 containment 设置 org.kde.image 壁纸。"""
+    return (
+        "var ds = desktops(); for (var i = 0; i < ds.length; i++) {"
+        "var d = ds[i]; d.wallpaperPlugin = 'org.kde.image';"
+        "d.currentConfigGroup = ['Wallpaper'];"
+        "d.writeConfig('Image', 'file://" + p + "');}"
+    )
+
+
+def _set_kde(p: str) -> bool:
+    """KDE Plasma: 经 plasmashell 的 D-Bus 脚本接口实时换壁纸。成功返回 True。"""
+    script = _kde_script(p)
+    cmds = [
+        ["qdbus", "org.kde.plasmashell", "/PlasmaShell", "evaluateScript", script],
+        ["qdbus6", "org.kde.plasmashell", "/PlasmaShell", "evaluateScript", script],
+        ["qdbus-qt6", "org.kde.plasmashell", "/PlasmaShell", "evaluateScript", script],
+        ["qdbus5", "org.kde.plasmashell", "/PlasmaShell", "evaluateScript", script],
+        ["gdbus", "call", "--session", "--dest", "org.kde.plasmashell",
+         "--object-path", "/PlasmaShell",
+         "--method", "org.kde.PlasmaShell.evaluateScript", script],
+        ["dbus-send", "--session", "--dest=org.kde.plasmashell", "--type=method_call",
+         "/PlasmaShell", "org.kde.PlasmaShell.evaluateScript", f"string:{script}"],
+    ]
+    for cmd in cmds:
+        if shutil.which(cmd[0]):
+            try:
+                if _run(cmd, timeout=15).returncode == 0:
+                    return True
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+    return False
+
+
+def _set_gnome(p: str) -> bool:
+    """GNOME/gsettings 系(Cinnamon/MATE/Budgie 等同协议): 写亮/暗两套 uri。"""
+    if not shutil.which("gsettings"):
+        return False
+    uri = "file://" + p
+    r1 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri])
+    r2 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri])
+    _run(["gsettings", "set", "org.gnome.desktop.background", "picture-options", "zoomed"])
+    return r1.returncode == 0 and r2.returncode == 0
+
+
 def _set_linux(path: Path, indices: list[int]) -> None:
     p = str(path.resolve())
+    de = _desktop_env()
+    # KDE Plasma: plasmashell 在跑(或当前桌面是 KDE)时优先走 D-Bus 脚本接口
+    if de == "kde" or shutil.which("plasmashell"):
+        if _set_kde(p):
+            return
     # Omarchy: 走系统背景机制(更新 current/background 软链并通知 shell 插件),
     # 与主题切换/时间壁纸联动；系统级生效于全部显示器
     if shutil.which("omarchy"):
@@ -220,17 +284,15 @@ def _set_linux(path: Path, indices: list[int]) -> None:
                 return
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
-    if shutil.which("gsettings"):
-        uri = "file://" + p
-        r1 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri])
-        r2 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri])
-        if r1.returncode == 0 and r2.returncode == 0:
-            return
+    if de == "gnome" and _set_gnome(p):
+        return
+    if shutil.which("gsettings") and _set_gnome(p):
+        return
     if shutil.which("feh"):
         r = _run(["feh", "--bg-fill", p])
         if r.returncode == 0:
             return
-    raise WallpaperError("壁纸设置失败: 未找到可用的壁纸工具 (omarchy/swww/hyprpaper/gsettings/feh) 或全部执行失败")
+    raise WallpaperError("壁纸设置失败: 未找到可用的壁纸工具 (kde/omarchy/swww/hyprpaper/gsettings/feh) 或全部执行失败")
 
 
 def set_wallpaper(path: Path, displays=None) -> None:

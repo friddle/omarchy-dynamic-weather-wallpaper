@@ -60,6 +60,6 @@ cd omarchy-dynamic-weather-wallpaper
                     # http://127.0.0.1:8765 and prints a guide to the settings page
 ```
 
-Python 3 standard library only, no pip dependencies. Wallpaper switching auto-detects omarchy / swww / hyprpaper / gsettings / feh.
+Python 3 standard library only, no pip dependencies. Wallpaper switching auto-detects KDE Plasma / GNOME / omarchy / swww / hyprpaper / gsettings / feh.
 
 > API keys are stored only in the local config file.

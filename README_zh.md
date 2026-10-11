@@ -60,6 +60,6 @@ cd omarchy-dynamic-weather-wallpaper
                     # http://127.0.0.1:8765 并输出配置页说明
 ```
 
-仅依赖 Python 3 标准库,无需 pip 安装。壁纸切换自动探测 omarchy / swww / hyprpaper / gsettings / feh。
+仅依赖 Python 3 标准库,无需 pip 安装。壁纸切换自动探测 KDE Plasma / GNOME / omarchy / swww / hyprpaper / gsettings / feh。
 
 > API Key 仅保存在本机配置文件中。

@@ -494,5 +494,29 @@ class TestResolutionFit(unittest.TestCase):
         self.assertEqual(app.nearest_sizes("auto"), ["1536x1024"])
 
 
+class TestLinuxWallpaperBackends(unittest.TestCase):
+    def test_desktop_env(self):
+        from unittest import mock
+        from weatherwall import wallpaper
+        with mock.patch.dict("os.environ", {"XDG_CURRENT_DESKTOP": "KDE"}, clear=True):
+            self.assertEqual(wallpaper._desktop_env(), "kde")
+        with mock.patch.dict("os.environ",
+                             {"XDG_CURRENT_DESKTOP": "ubuntu:GNOME"}, clear=True):
+            self.assertEqual(wallpaper._desktop_env(), "gnome")
+        with mock.patch.dict("os.environ", {"KDE_FULL_SESSION": "1"}, clear=True):
+            self.assertEqual(wallpaper._desktop_env(), "kde")
+        with mock.patch.dict("os.environ", {"XDG_CURRENT_DESKTOP": "Hyprland"}, clear=True):
+            self.assertEqual(wallpaper._desktop_env(), "hyprland")
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(wallpaper._desktop_env(), "")
+
+    def test_kde_script(self):
+        from weatherwall import wallpaper
+        s = wallpaper._kde_script("/tmp/wall.jpg")
+        self.assertIn("file:///tmp/wall.jpg", s)
+        self.assertIn("org.kde.image", s)
+        self.assertIn("writeConfig('Image'", s)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
