@@ -447,5 +447,26 @@ class TestResolutionFit(unittest.TestCase):
         self.assertEqual(widget._probe_size(same), (800, 600))
 
 
+    def test_nearest_sizes(self):
+        from weatherwall import app
+        # 2560x1600(16:10): 宽高比最近的是 3:2 的 1536x1024, 其后按面积排 16:9 档
+        self.assertEqual(app.nearest_sizes("2560x1600")[0], "1536x1024")
+        order = app.nearest_sizes("2560x1600")
+        self.assertEqual(order, ["1536x1024", "2560x1440", "1920x1080",
+                                 "3840x2160", "1024x1024", "1024x1536"])
+        # 16:9 屏幕: 同比例下面积最近的优先
+        self.assertEqual(app.nearest_sizes("2560x1440")[0], "1920x1080")
+        # 竖屏: 候选转竖版
+        self.assertEqual(app.nearest_sizes("1080x1920")[0], "1024x1536")
+        # 已知被拒的尺寸被剔除; 目标本身不在候选里
+        app._UNSUPPORTED.add("1536x1024")
+        try:
+            self.assertNotIn("1536x1024", app.nearest_sizes("2560x1600"))
+        finally:
+            app._UNSUPPORTED.discard("1536x1024")
+        # 目标无法解析 -> 通用横版
+        self.assertEqual(app.nearest_sizes("auto"), ["1536x1024"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

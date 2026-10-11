@@ -134,25 +134,38 @@ class App:
                     cfg["generator"].get("prompt") or "", tags, info["city"], base_name,
                     lang=str((cfg.get("ui") or {}).get("language") or "en"))
                 gen_cfg = dict(cfg["generator"])
-                gen_cfg["size"] = resolve_size(gen_cfg.get("size"),
-                                               wallpaper.display_resolution())
+                size = resolve_size(gen_cfg.get("size"), wallpaper.display_resolution())
+                if size in _UNSUPPORTED:  # 进程内已知被拒: 直接取最近候选, 不再撞一次
+                    size = nearest_sizes(size)[0]
+                gen_cfg["size"] = size
                 try:
                     try:
                         data, ext = generate.generate_image(
                             gen_cfg, prompt, base_path,
                             proxy=region_net_proxy(cfg))
                     except Exception as e:
-                        # auto=屏幕分辨率可能不被接口支持(如 2560x1600):
-                        # 回落到通用支持的 1536x1024 重试一次, fit_to 会再裁到屏幕尺寸
-                        if ("size" in str(e).lower()
-                                and str(gen_cfg.get("size")).lower() not in ("", "auto", "1536x1024")):
-                            self.log(f"尺寸 {gen_cfg.get('size')} 不被接口支持，改用 1536x1024 重试")
-                            gen_cfg["size"] = "1536x1024"
-                            data, ext = generate.generate_image(
-                                gen_cfg, prompt, base_path,
-                                proxy=region_net_proxy(cfg))
-                        else:
+                        # 目标尺寸不被接口支持(如 2560x1600): 由近到远换候选重试,
+                        # fit_to 会把任意比例裁到屏幕尺寸, 视觉无损
+                        if "size" not in str(e).lower():
                             raise
+                        _UNSUPPORTED.add(str(gen_cfg.get("size")).lower())
+                        cands = nearest_sizes(str(gen_cfg.get("size")))
+                        last_err: Exception | None = e
+                        for cand in cands[:2]:
+                            self.log(f"尺寸 {gen_cfg.get('size')} 不被接口支持，改用 {cand} 重试")
+                            gen_cfg["size"] = cand
+                            try:
+                                data, ext = generate.generate_image(
+                                    gen_cfg, prompt, base_path,
+                                    proxy=region_net_proxy(cfg))
+                                break
+                            except Exception as e2:
+                                last_err = e2
+                                if "size" not in str(e2).lower():
+                                    raise
+                                _UNSUPPORTED.add(cand)
+                        else:
+                            raise last_err if last_err else e
                 except Exception as e:  # noqa: BLE001 - 生图失败不中断本轮: 有基准图则降级直用
                     if base_path is None:
                         raise
@@ -321,6 +334,37 @@ def resolve_size(size: str, display_res: tuple[int, int] | None) -> str:
     if s == "auto":
         return f"{display_res[0]}x{display_res[1]}" if display_res else "auto"
     return (size or "auto").strip()
+
+
+# 常见支持尺寸(主流生图 API 的档位 + 常见显示器档位), 供"最近尺寸"回落
+SIZE_LADDER = ["3840x2160", "2560x1440", "1920x1080",
+               "1536x1024", "1024x1536", "1024x1024"]
+_UNSUPPORTED: set[str] = set()  # 进程内记住被接口拒绝的尺寸
+
+
+def _parse_wh(s: str) -> tuple[int, int] | None:
+    try:
+        w, h = s.lower().split("x")
+        return int(w), int(h)
+    except (ValueError, AttributeError):
+        return None
+
+
+def nearest_sizes(target: str) -> list[str]:
+    """与目标尺寸最接近的候选, 由近到远: 先比宽高比, 再比像素面积。
+    已知被拒(_UNSUPPORTED)与目标本身被剔除; 目标无法解析时给通用横版。"""
+    twh = _parse_wh(target)
+    if not twh:
+        return ["1536x1024"]
+    tw, th = twh
+
+    def dist(s: str) -> tuple[float, float]:
+        w, h = _parse_wh(s) or (1, 1)
+        return (abs(w / h - tw / th) / (tw / th),
+                abs(w * h - tw * th) / (tw * th))
+
+    cands = [s for s in SIZE_LADDER if s != target and s not in _UNSUPPORTED]
+    return sorted(cands, key=dist)
 
 
 def _version() -> str:
