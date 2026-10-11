@@ -49,6 +49,22 @@
 
 生图接口为 OpenAI 兼容格式,`base_url` 可指向官方、中转站或自建网关;未配置 Key 时自动降级:直接以基准图作为壁纸。生图调用失败(接口不可达、Key 无效、额度用尽等)时同样降级,不会中断整轮流程。
 
+## Omarchy(插件方式)
+
+在 [Omarchy](https://omarchy.org/) 上,本仓库同时是一个标准 shell 插件——顶栏天气挂件(图标 + 气温,悬浮显示详情),一键打开控制页,右键启动/重启壁纸服务:
+
+```bash
+omarchy plugin add https://github.com/friddle/omarchy-dynamic-weather-wallpaper.git --enable
+```
+
+装好后右键挂件一次即可安装并启动服务(也可先自行运行 `./install.sh linux`)。"切主题不换壁纸"只需装一个 hook:
+
+```bash
+curl -o ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper \
+  https://raw.githubusercontent.com/friddle/omarchy-dynamic-weather-wallpaper/main/keep-dynamic-wallpaper.hook
+chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+```
+
 ## Linux / 源码运行
 
 ```bash

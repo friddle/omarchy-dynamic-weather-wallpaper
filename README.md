@@ -49,6 +49,22 @@ Default mode `auto` needs no API key: it uses itboy (China Meteorological Admini
 
 The image API is OpenAI-compatible; `base_url` can point to the official API, a relay, or your own gateway. Without a key — or when the API call fails (unreachable endpoint, bad key, quota) — the app degrades gracefully: your base photo itself becomes the wallpaper and the round is never aborted.
 
+## Omarchy (plugin)
+
+On [Omarchy](https://omarchy.org/) the repo doubles as a standard shell plugin — a bar widget with live weather (icon + temperature, hover for details), the control panel one click away, and right-click start/restart for the wallpaper service:
+
+```bash
+omarchy plugin add https://github.com/friddle/omarchy-dynamic-weather-wallpaper.git --enable
+```
+
+Then right-click the widget once to install and start the service (or run `./install.sh linux` yourself first). To keep your dynamic wallpaper when switching themes, add a one-line hook:
+
+```bash
+curl -o ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper \
+  https://raw.githubusercontent.com/friddle/omarchy-dynamic-weather-wallpaper/main/keep-dynamic-wallpaper.hook
+chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+```
+
 ## Linux / running from source
 
 ```bash

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.friddle.weatherwall",
+  "name": "Dynamic Weather Wallpaper",
+  "version": "1.2.0",
+  "author": "friddle",
+  "license": "MIT",
+  "description": "AI-generated time & weather aware live wallpapers. Bar widget shows live weather from the weatherwall service; left-click opens the control panel, right-click starts/restarts the service.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "WeatherWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Weather Wallpaper",
+    "description": "Live weather status and service control for the dynamic weather wallpaper service",
+    "category": "Desktop",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "pollIntervalSec": 120,
+      "showCity": false
+    },
+    "schema": [
+      {
+        "key": "pollIntervalSec",
+        "type": "integer",
+        "label": "Poll interval (seconds)",
+        "min": 15,
+        "max": 3600,
+        "step": 15,
+        "defaultValue": 120
+      },
+      {
+        "key": "showCity",
+        "type": "boolean",
+        "label": "Show city name in the bar",
+        "defaultValue": false
+      }
+    ]
+  }
+}

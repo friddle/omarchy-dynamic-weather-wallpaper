@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Omarchy theme-set hook: keep the dynamic weather wallpaper after a theme switch.
+# Install with:
+#   curl -o ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper <raw-url>/keep-dynamic-wallpaper.hook
+#   chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+# omarchy-theme-set points ~/.local/state/omarchy/current/background at the new
+# theme's stock background; this restores the latest weatherwall wallpaper while
+# the service is active. Runs via `omarchy-hook theme-set <name>`.
+set -euo pipefail
+
+systemctl --user is-active --quiet weatherwall.service || exit 0
+
+sleep 0.5
+
+applied="$HOME/.cache/omarchy-dynamic-wallpaper/applied"
+latest=$(ls -1t "$applied"/*.jpg 2>/dev/null | head -n 1 || true)
+[[ -n $latest && -f $latest ]] || exit 0
+
+omarchy theme bg set "$latest"
