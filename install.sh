@@ -11,6 +11,43 @@ ID="com.friddle.weatherwall"
 command -v python3 >/dev/null || { echo "需要 python3"; exit 1; }
 python3 -m weatherwall init
 
+CONFIG_URL="http://127.0.0.1:8765"
+
+# 等设置后台就绪(最多 ~15s)，就绪后在默认浏览器弹出配置页
+open_config_page() {
+  if python3 - "$CONFIG_URL" <<'PY' 2>/dev/null
+import sys, time, urllib.request
+for _ in range(30):
+    try:
+        urllib.request.urlopen(sys.argv[1] + "/api/status", timeout=2)
+        sys.exit(0)
+    except Exception:
+        time.sleep(0.5)
+sys.exit(1)
+PY
+  then
+    if [ "$(uname)" = "Darwin" ]; then
+      open "$CONFIG_URL" >/dev/null 2>&1 || true
+    else
+      xdg-open "$CONFIG_URL" >/dev/null 2>&1 || true
+    fi
+    echo "已在浏览器打开配置页: $CONFIG_URL"
+  else
+    echo "配置页地址: $CONFIG_URL (服务暂未就绪，稍后手动打开)"
+  fi
+}
+
+# 配置页说明
+describe_config_page() {
+  cat <<EOF
+配置页说明 ($CONFIG_URL):
+  ◉ 运行状态     运行日志、当前天气与标签；立即刷新 / 强制重新生图 / 测试天气
+  🏞 基准图与 AI  上传或让 AI 生成基准图；填写 OpenAI 兼容生图 API (Base URL / Key / 模型 / Prompt 模板)
+  ⚙ 详细配置     网络通道与代理、天气源与城市(IP 自动定位)、目标显示器、刷新间隔与命名规则、语言
+  🗂 壁纸库      按基准图分组的成品壁纸，点击任意一张立即应用
+EOF
+}
+
 if [ "${1:-}" = "remove" ]; then
   if [ "$(uname)" = "Darwin" ]; then
     launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/$ID.plist" 2>/dev/null || true
@@ -43,7 +80,9 @@ EOF
   launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/$ID.plist" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$ID.plist"
   echo "已安装 LaunchAgent 并启动: $ID"
-  echo "设置后台: http://127.0.0.1:8765  (日志: /tmp/weatherwall.log)"
+  echo "设置后台: $CONFIG_URL  (日志: /tmp/weatherwall.log)"
+  describe_config_page
+  open_config_page
 
 elif [ "${1:-}" = "linux" ]; then
   mkdir -p "$HOME/.config/systemd/user"
@@ -65,11 +104,13 @@ EOF
   if systemctl --user daemon-reload 2>/dev/null; then
     systemctl --user enable --now weatherwall.service
     echo "已安装 systemd 用户服务并启动"
+    describe_config_page
+    open_config_page
   else
     echo "无 systemd，请在 Hyprland 配置加入:"
     echo "  exec-once = $SRC/run.sh serve"
+    echo "配置页地址: $CONFIG_URL"
   fi
-  echo "设置后台: http://127.0.0.1:8765"
 
 else
   echo "用法: ./install.sh [mac|linux|remove]  (mac 上默认 mac)"

@@ -6,6 +6,8 @@
 """
 
 import json
+import ssl
+import time
 import urllib.error
 import urllib.request
 
@@ -40,8 +42,24 @@ def request(url: str, data: bytes | None = None, headers: dict | None = None,
 
 def http_json(url: str, timeout: float = 12.0, proxy: str = "", headers: dict | None = None,
               data: bytes | None = None, direct: bool = False) -> dict:
-    with request(url, data=data, headers=headers, timeout=timeout, proxy=proxy, direct=direct) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    # TLS 握手被掐断/连接被重置时请求未必送达, 短重试是安全的(含生图 POST);
+    # HTTPError(如 401/500)与超时不重试
+    retryable = (ssl.SSLError, ConnectionResetError)
+    last: Exception | None = None
+    for attempt in range(3):
+        try:
+            with request(url, data=data, headers=headers, timeout=timeout,
+                         proxy=proxy, direct=direct) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError as e:
+            if isinstance(getattr(e, "reason", None), retryable) and attempt < 2:
+                last = e
+                time.sleep(1 + attempt)
+                continue
+            raise
+    raise last  # pragma: no cover
 
 
 def http_bytes(url: str, timeout: float = 12.0, proxy: str = "") -> bytes:

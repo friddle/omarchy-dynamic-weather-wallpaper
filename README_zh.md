@@ -38,6 +38,7 @@
 | Status | 运行状态、立即刷新 / 强制重生成、日志 |
 | Base & AI | 基准图管理、生图 API 配置、用文字描述直接生成基准图 |
 | Advanced | 网络通道、天气源、城市(支持 IP 自动定位)、目标显示器、语言 |
+| 挂件 | 把天气/温度信息挂件合成到壁纸上——样式、拖拽定位、字段行编辑、背景不透明度、字号缩放 |
 | Gallery | 壁纸库,按基准图分组,点击任意壁纸立即应用 |
 
 多显示器可在 Advanced → 目标显示器 中指定应用到哪几台。
@@ -46,7 +47,7 @@
 
 默认 `auto` 模式免 Key:国内网络走 itboy(中国气象局数据),国外走 open-meteo,自动探测、失败自动回落。也支持和风天气、OpenWeatherMap(免费申请 Key,设置页内有获取步骤)。
 
-生图接口为 OpenAI 兼容格式,`base_url` 可指向官方、中转站或自建网关;未配置 Key 时自动降级:直接以基准图作为壁纸。
+生图接口为 OpenAI 兼容格式,`base_url` 可指向官方、中转站或自建网关;未配置 Key 时自动降级:直接以基准图作为壁纸。生图调用失败(接口不可达、Key 无效、额度用尽等)时同样降级,不会中断整轮流程。
 
 ## Linux / 源码运行
 
@@ -55,9 +56,10 @@ git clone https://github.com/friddle/omarchy-dynamic-weather-wallpaper.git
 cd omarchy-dynamic-weather-wallpaper
 ./run.sh init
 ./run.sh gui        # 后台服务 + 设置窗口
-./install.sh linux  # 开机自启(systemd 用户服务)
+./install.sh linux  # 开机自启(systemd 用户服务)；完成后自动打开
+                    # http://127.0.0.1:8765 并输出配置页说明
 ```
 
-仅依赖 Python 3 标准库,无需 pip 安装。壁纸切换自动探测 swww / hyprpaper / gsettings / feh。
+仅依赖 Python 3 标准库,无需 pip 安装。壁纸切换自动探测 omarchy / swww / hyprpaper / gsettings / feh。
 
 > API Key 仅保存在本机配置文件中。

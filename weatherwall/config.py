@@ -66,14 +66,19 @@ def normalize_stem(name: str, fallback: str = "base") -> str:
     return re.sub(r"_+", "_", "_".join(tokens)).strip("_") or fallback
 
 # 默认 Prompt(英文)。中文用户可自行在设置页改为中文模板。
+# {daypart_name}/{time} 让生图模型明确昼夜: 夜里出夜景, 傍晚出暮色。
+# 时段指令为强制项: 即使参考照片是白天, 也必须按所述时间重绘光照与天空。
 DEFAULT_PROMPT = (
     "Based on this reference photo, create a stunning desktop wallpaper: "
     "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
-    "solar term {solarterm_name}, daytime segment {hours}. "
-    "Preserve the original composition, main subject and color palette, "
+    "solar term {solarterm_name}. "
+    "TIME OF DAY IS MANDATORY: it is currently {daypart_name} (local time {time}, "
+    "daytime segment {hours}). Even if the reference photo shows different lighting, "
+    "you must repaint the lighting and sky to match — "
+    "at night: a dark night sky with the moon or stars and dim ambient light; "
+    "at dawn or dusk: a warm low-sun glow; by day: sun consistent with the weather. "
+    "Preserve the original composition and main subject, "
     "naturally blending in the weather and seasonal atmosphere. "
-    "If the scene includes sky, render the appropriate sun, moon or stars "
-    "in a suitable position consistent with the weather and time of day. "
     "Photorealistic, rich details, no text or watermark."
 )
 
@@ -99,7 +104,28 @@ LEGACY_PROMPT_EN_V1 = (
     "naturally blending in the weather and seasonal atmosphere. "
     "Photorealistic, rich details, no text or watermark."
 )
-LEGACY_PROMPTS = (LEGACY_PROMPT_ZH, LEGACY_PROMPT_EN_V1)
+LEGACY_PROMPT_EN_V2 = (
+    "Based on this reference photo, create a stunning desktop wallpaper: "
+    "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
+    "solar term {solarterm_name}, daytime segment {hours}. "
+    "Preserve the original composition, main subject and color palette, "
+    "naturally blending in the weather and seasonal atmosphere. "
+    "If the scene includes sky, render the appropriate sun, moon or stars "
+    "in a suitable position consistent with the weather and time of day. "
+    "Photorealistic, rich details, no text or watermark."
+)
+LEGACY_PROMPT_EN_V3 = (
+    "Based on this reference photo, create a stunning desktop wallpaper: "
+    "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
+    "solar term {solarterm_name}, daytime segment {hours} "
+    "(it is currently {daypart_name}, local time {time}). "
+    "Preserve the original composition, main subject and color palette, "
+    "naturally blending in the weather, seasonal and time-of-day atmosphere: "
+    "by night render a dark scene lit by the moon or stars, at dawn or dusk a warm low-sun glow, "
+    "and by day the sun in a position consistent with the weather. "
+    "Photorealistic, rich details, no text or watermark."
+)
+LEGACY_PROMPTS = (LEGACY_PROMPT_ZH, LEGACY_PROMPT_EN_V1, LEGACY_PROMPT_EN_V2, LEGACY_PROMPT_EN_V3)
 
 DEFAULT_CONFIG = {
     # auto: 初始化时探测(google 通->global, 不通->china)，可手动覆盖
@@ -137,6 +163,19 @@ DEFAULT_CONFIG = {
     "wallpaper": {
         "apply": True,
         "displays": "all",   # "all" 或 序号列表 [1,3] (对应 /api/displays 返回的 index)
+    },
+    # 信息挂件: 壁纸应用前把天气/温度等字段合成到图上(ffmpeg drawtext, 无需额外依赖)
+    "widget": {
+        "enabled": False,
+        "style": "glass",         # glass / card / minimal / banner
+        "bg_opacity": 0.55,       # 挂件背景不透明度 0~1
+        "scale": 0.3,             # 字号缩放 0.2~2.0, 0.3 即 4K 图上基准字号约 34px
+        "position": {"x": 0.94, "y": 0.08},  # 挂件盒中心(相对图片 0~1), 默认右上角; banner 固定底部
+        "fields": [               # 字段模板行, 占位符可自由编辑替换/增删/排序
+            "{city}",
+            "{weather_name} · {temp}°C ({temp_min}~{temp_max}°C)",
+            "{solarterm_name} · {time}",
+        ],
     },
     "base_image": "",             # base_images/ 下的文件名
     "ui": {
@@ -176,6 +215,11 @@ def base_images_dir() -> Path:
 
 def cache_dir() -> Path:
     return _cache_dir() / "wallpapers"
+
+
+def applied_dir() -> Path:
+    """合成挂件后的成品(应用中)壁纸; 放在 wallpapers 之外避免混入壁纸库。"""
+    return _cache_dir() / "applied"
 
 
 WALLPAPER_EXTS = (".jpg", ".jpeg", ".png", ".webp")

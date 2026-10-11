@@ -94,6 +94,24 @@ textarea{resize:vertical;min-height:96px}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .logbox{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
   max-height:230px;overflow:auto;font:11.5px/1.7 ui-monospace,Menlo,monospace;color:#9fa8bd;white-space:pre-wrap}
+/* widget tab */
+.wg-preview{position:relative;aspect-ratio:16/9;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  background:#0b0d13 center/cover no-repeat;touch-action:none}
+.wg-drag{position:absolute;max-width:70%;padding:.75em 1em;border-radius:.9em;cursor:grab;user-select:none;
+  font-size:clamp(11px,1.9vw,15px);line-height:1.5;color:#fff;background:rgba(10,12,18,var(--wgo,.55));
+  border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);white-space:nowrap;
+  transform:translate(-50%,-50%)}
+.wg-drag:active{cursor:grabbing}
+.wg-drag .t{font-size:1.45em;font-weight:600}
+.wg-drag.wgstyle-card{backdrop-filter:none}
+.wg-drag.wgstyle-minimal{background:transparent;border:0;backdrop-filter:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.wg-drag.wgstyle-banner{left:0!important;top:auto!important;bottom:0;max-width:100%;width:100%;
+  border-radius:0;border:0;border-top:1px solid rgba(255,255,255,.25);cursor:default;transform:none}
+.wg-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.wg-row input{flex:1}
+.wg-row .op{width:28px;height:28px;flex:0 0 28px;border-radius:7px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--text);cursor:pointer;font-size:12px;line-height:1}
+.wg-row .op:hover{border-color:var(--accent)}
 .footer{color:var(--muted);font-size:12px;text-align:center;margin-top:10px}
 .hidden{display:none!important}
 .modal{position:fixed;inset:0;background:rgba(6,8,12,.66);backdrop-filter:blur(3px);
@@ -114,6 +132,7 @@ textarea{resize:vertical;min-height:96px}
     <button id="tabbtn-status" class="on"><span class="ic">◉</span><span data-i18n="tab_status">Status</span></button>
     <button id="tabbtn-base"><span class="ic">🏞</span><span data-i18n="tab_base">Base &amp; AI</span></button>
     <button id="tabbtn-adv"><span class="ic">⚙</span><span data-i18n="tab_adv">Advanced</span></button>
+    <button id="tabbtn-widget"><span class="ic">🪧</span><span data-i18n="tab_widget">Widget</span></button>
     <button id="tabbtn-gallery"><span class="ic">🗂</span><span data-i18n="tab_gallery">Gallery</span></button>
   </nav>
 
@@ -170,14 +189,20 @@ textarea{resize:vertical;min-height:96px}
         </div>
         <div>
           <label data-i18n="ai_model">Model</label>
-          <input type="text" id="gen-model" placeholder="gpt-image-1">
+          <input type="text" id="gen-model" list="model-options" placeholder="gpt-image-1">
+          <datalist id="model-options"></datalist>
+          <div class="hint" data-i18n="ai_model_hint">Candidates load from your API once Base URL &amp; Key are set; free text allowed.</div>
         </div>
         <div>
           <label data-i18n="ai_size">Size</label>
-          <select id="gen-size">
-            <option value="auto">auto</option>
-            <option>1024x1024</option><option>1536x1024</option><option>1024x1536</option>
-          </select>
+          <input type="text" id="gen-size" list="size-options" placeholder="auto">
+          <datalist id="size-options">
+            <option value="auto"></option><option value="1024x1024"></option>
+            <option value="1536x1024"></option><option value="1024x1536"></option>
+            <option value="1920x1080"></option><option value="2560x1440"></option>
+            <option value="3840x2160"></option>
+          </datalist>
+          <div class="hint" data-i18n="ai_size_hint">Any WxH your API supports; auto = provider default. Your monitor's native size gives the sharpest wallpaper.</div>
         </div>
         <div style="grid-column:1/-1">
           <label data-i18n="ai_prompt">Prompt Template</label>
@@ -344,7 +369,55 @@ textarea{resize:vertical;min-height:96px}
     </div>
   </section>
 
-  <!-- ============ Tab 4: Gallery ============ -->
+  <!-- ============ Tab 4: Widget ============ -->
+  <section id="tab-widget" class="hidden">
+    <div class="card">
+      <h2 data-i18n="wg_title">Wallpaper Info Widget</h2>
+      <p class="desc" data-i18n="wg_desc">Composite weather/temperature fields onto the wallpaper before it is applied. Rendered with ffmpeg (preinstalled on Omarchy).</p>
+      <div class="row" style="margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="wg-enable" style="width:auto">
+          <span style="color:var(--text);font-size:13px" data-i18n="wg_enable">Enable widget</span>
+        </label>
+        <span id="wg-ffwarn" class="badge err hidden" style="margin-left:auto" data-i18n="wg_need_ffmpeg">ffmpeg not found — widget disabled</span>
+      </div>
+      <div class="grid">
+        <div>
+          <label data-i18n="wg_style">Style</label>
+          <select id="wg-style">
+            <option value="glass" data-i18n="style_glass">Glass (frosted blur)</option>
+            <option value="card" data-i18n="style_card">Card</option>
+            <option value="minimal" data-i18n="style_minimal">Minimal (shadowed text)</option>
+            <option value="banner" data-i18n="style_banner">Bottom banner</option>
+          </select>
+        </div>
+        <div>
+          <label><span data-i18n="wg_opacity">Background opacity</span> · <span id="wg-op-v">55%</span></label>
+          <input type="range" id="wg-opacity" min="0" max="95" step="5" style="width:100%">
+        </div>
+        <div>
+          <label><span data-i18n="wg_scale">Font scale</span> · <span id="wg-scale-v">0.3</span></label>
+          <input type="range" id="wg-scale" min="20" max="200" step="5" style="width:100%">
+        </div>
+      </div>
+      <label style="margin-top:14px" data-i18n="wg_preview">Preview (drag the widget to set position)</label>
+      <div class="wg-preview" id="wg-preview">
+        <div class="wg-drag" id="wg-drag"></div>
+      </div>
+      <div class="hint" id="wg-pos-hint" data-i18n="wg_drag_hint">Drag the widget inside the preview; banner style is pinned to the bottom.</div>
+      <label style="margin-top:14px" data-i18n="wg_fields">Field lines (edit / replace / reorder / add your own)</label>
+      <div id="wg-fields"></div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn ghost small" id="wg-add" data-i18n="wg_add">Add line</button>
+      </div>
+      <div class="hint" style="margin-top:8px" data-i18n="wg_ph_hint"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btn-save-widget" data-i18n="save">Save</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Tab 5: Gallery ============ -->
   <section id="tab-gallery" class="hidden">
     <div class="card">
       <h2 data-i18n="gal_title">Wallpaper Gallery</h2>
@@ -385,7 +458,17 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const I18N={
 en:{
  title:"Dynamic Weather Wallpaper",subtitle:"A desktop plugin that keeps generating fresh dynamic wallpapers from your personal environment",
- tab_status:"Status",tab_base:"Base & AI",tab_adv:"Advanced",tab_gallery:"Gallery",
+ tab_status:"Status",tab_base:"Base & AI",tab_adv:"Advanced",tab_gallery:"Gallery",tab_widget:"Widget",
+ wg_title:"Wallpaper Info Widget",
+ wg_desc:"Composite weather/temperature fields onto the wallpaper before it is applied. Rendered with ffmpeg (preinstalled on Omarchy).",
+ wg_enable:"Enable widget",wg_style:"Style",
+ style_glass:"Glass (frosted blur)",style_card:"Card",style_minimal:"Minimal (shadowed text)",style_banner:"Bottom banner",
+ wg_opacity:"Background opacity",wg_scale:"Font scale",
+ wg_preview:"Preview (drag the widget to set position)",
+ wg_drag_hint:"Drag the widget inside the preview to set its position; banner style is pinned to the bottom.",
+ wg_fields:"Field lines (edit / replace / reorder / add your own)",wg_add:"Add line",
+ wg_ph_hint:"Placeholders: {city} {weather_name} {temp} {temp_min} {temp_max} {solarterm_name} {time} {date} {hours} — anything else is shown as-is (write your own quotes).",
+ wg_need_ffmpeg:"ffmpeg not found — widget disabled",
  run_status:"Run Status",st_platform:"Platform / Version",st_region:"Network Channel",
  st_weather:"Weather",st_tags:"Tags (weather / hours / temp / solar term)",st_file:"Target File",
  st_misc:"Base Image / API Key",
@@ -402,6 +485,8 @@ en:{
  ai_title:"AI Image Generation",ai_desc:"Any OpenAI-compatible images API. With a base image it calls images/edits (image-to-image); without one it calls images/generations.",
  ai_baseurl:"API Base URL (remote server)",ai_key:"API Key",ai_model:"Model",ai_size:"Size",ai_prompt:"Prompt Template",
  ai_ph:"Placeholders: {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} — English template recommended; Chinese works too.",
+ ai_size_hint:"auto = your display's resolution; or any WxH your API supports.",
+ ai_model_hint:"Candidates load from your API once Base URL & Key are set; free text allowed.",
  ai_nofallback:"Without an API key the base image is used directly (fallback mode).",
  net_title:"Network Channel",net_desc:"Determines the default weather services. With auto, connectivity is checked at startup: international services are used when reachable, otherwise China-direct services.",
  net_region:"Channel",net_auto:"auto · Detect automatically",
@@ -426,6 +511,7 @@ en:{
  t_no_walls:"No wallpapers yet — click Refresh Now",t_cache_hit:"cache hit",t_new:"new",t_confirm_force:"Regenerate the current wallpaper via AI? The cached image will be replaced.",
  t_apply_ok:"Applied: ",t_detect_none:"network unreachable",
  kw_none:"none",kw_auto:"auto → ",kw_detected:"detected",kw_cached:"cache hit",kw_new:"generated",kw_err:"last error",
+ kw_degraded:"AI fallback (see log)",
  key_howto_q:"Get a key: open <b>console.qweather.com</b> → sign up → Console → Projects → create project & credential → copy the Key. New accounts also get a dedicated <b>API Host</b> (abcxxx.re.qweatherapi.com) to fill in above. Free tier: 1000 calls/day.",
  key_howto_o:"Get a key: open <b>home.openweathermap.org</b> → sign up → \"API keys\" page → copy (activates in ~10 min). Free tier: 60 calls/min.",
  key_howto_free:"Keyless source selected — no key needed.",
@@ -433,7 +519,17 @@ en:{
 },
 zh:{
  title:"动态天气壁纸",subtitle:"针对个人用户的环境不停生成新的动态壁纸的桌面插件",
- tab_status:"运行状态",tab_base:"基准图与 AI",tab_adv:"详细配置",tab_gallery:"壁纸库",
+ tab_status:"运行状态",tab_base:"基准图与 AI",tab_adv:"详细配置",tab_gallery:"壁纸库",tab_widget:"挂件",
+ wg_title:"壁纸信息挂件",
+ wg_desc:"应用壁纸前，把天气/温度等字段合成到图上。使用 ffmpeg 渲染(Omarchy 一般自带)。",
+ wg_enable:"启用挂件",wg_style:"样式",
+ style_glass:"毛玻璃",style_card:"卡片",style_minimal:"极简(阴影字)",style_banner:"底部横幅",
+ wg_opacity:"背景不透明度",wg_scale:"字号缩放",
+ wg_preview:"预览(拖动挂件设置位置)",
+ wg_drag_hint:"在预览图中拖动挂件设置位置；横幅样式固定底部。",
+ wg_fields:"字段行(可编辑 / 替换 / 排序 / 添加自定义话语)",wg_add:"添加一行",
+ wg_ph_hint:"占位符：{city} {weather_name} {temp} {temp_min} {temp_max} {solarterm_name} {time} {date} {hours} —— 其余文字原样显示，可自由添加话语。",
+ wg_need_ffmpeg:"未找到 ffmpeg，挂件不可用",
  run_status:"运行状态",st_platform:"平台 / 版本",st_region:"网络通道",
  st_weather:"天气",st_tags:"标签 (天气 / 时段 / 温度 / 节气)",st_file:"目标文件",
  st_misc:"基准图 / API Key",
@@ -451,6 +547,8 @@ zh:{
  ai_baseurl:"API Base URL (远程服务器)",ai_key:"API Key",ai_model:"模型",ai_size:"尺寸",ai_prompt:"Prompt 模板",
  ai_ph:"占位符：{weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} —— 推荐英文模板，中文亦可。",
  ai_nofallback:"未配置 API Key 时直接使用基准图(降级模式)。",
+ ai_size_hint:"auto = 当前显示器分辨率；也可输入接口支持的任意 宽x高。",
+ ai_model_hint:"配置好 Base URL 与 Key 后自动加载模型候选，也可自由输入。",
  net_title:"网络通道",net_desc:"决定默认使用的天气服务。选择 auto 时，启动阶段会自动检测网络连通性：可访问国际网络时使用国外服务，否则使用国内服务。",
  net_region:"通道",net_auto:"auto · 自动检测",
  net_proxy:"HTTP 代理（可选）",net_proxy_ph:"例如 http://host:port，留空则直连",
@@ -474,6 +572,7 @@ zh:{
  t_no_walls:"还没有壁纸，点「立即刷新」生成",t_cache_hit:"缓存命中",t_new:"新生成",t_confirm_force:"确定重新生成当前壁纸？将调用 AI 并替换缓存图片。",
  t_apply_ok:"已应用：",t_detect_none:"网络不可用",
  kw_none:"无",kw_auto:"auto → ",kw_detected:"探测",kw_cached:"缓存命中",kw_new:"新生成",kw_err:"最近错误",
+ kw_degraded:"生图降级 (见日志)",
  key_howto_q:"获取 Key：打开 <b>console.qweather.com</b> → 注册登录 → 控制台「项目管理」创建项目并生成凭据 → 复制 Key；新账号会分配专属 <b>API Host</b>(abcxxx.re.qweatherapi.com)，填到上方输入框。免费订阅每天 1000 次。",
  key_howto_o:"获取 Key：打开 <b>home.openweathermap.org</b> → 注册 → 「API keys」页直接复制(约 10 分钟生效)。免费档 60 次/分钟。",
  key_howto_free:"当前为免 Key 源，无需填写。",
@@ -505,12 +604,13 @@ async function api(path,body){
   if(!j.ok&&j.error)throw new Error(j.error);return j;}
 
 /* ---------------- tabs ---------------- */
-const TABS=['status','base','adv','gallery'];
+const TABS=['status','base','adv','widget','gallery'];
 TABS.forEach(name=>$('tabbtn-'+name).onclick=()=>{
   TABS.forEach(n=>{$('tab-'+n).classList.toggle('hidden',n!==name);
     $('tabbtn-'+n).classList.toggle('on',n===name);});
   if(name==='gallery')loadWalls();
   if(name==='adv'&&!DISPLAYS.length)loadDisplays();
+  if(name==='widget'){wgPreviewBg();wgRender();}
 });
 
 /* ---------------- language ---------------- */
@@ -537,9 +637,12 @@ function renderStatus(st){
     +(st.proxy?' · proxy '+st.proxy:'');
   $('st-region').innerHTML='<span class="badge">'+esc(regionTxt)+'</span>';
   const w=st.state.last_weather;
+  const genErr=st.state.last_gen_error;
+  const genBadge=st.state.last_error
+    ?' <span class="badge err" title="'+esc(st.state.last_error)+'">'+t('kw_err')+'</span>'
+    :(genErr?' <span class="badge warn" title="'+esc(genErr)+'">'+t('kw_degraded')+'</span>':'');
   $('st-weather').innerHTML=w
-    ?esc(`${w.city} · ${WX_NAME[LANG][w.tag]||w.desc} · ${w.temp_current}℃ (${w.temp_min}~${w.temp_max}℃) · ${w.provider}`)
-    +((st.state.last_error)?' <span class="badge err">'+t('kw_err')+'</span>':'')
+    ?esc(`${w.city} · ${WX_NAME[LANG][w.tag]||w.desc} · ${w.temp_current}℃ (${w.temp_min}~${w.temp_max}℃) · ${w.provider}`)+genBadge
     :'<span class="badge warn">—</span>';
   const tg=st.state.last_tags;
   $('st-tags').innerHTML=tg
@@ -553,11 +656,13 @@ function renderStatus(st){
     +' '+(st.has_api_key?'<span class="badge ok">API Key ✓</span>':'<span class="badge warn">'+t('no_key')+'</span>');
   $('log').textContent=(st.log||[]).join('\n');
   const lb=$('log');lb.scrollTop=lb.scrollHeight;
+  $('wg-ffwarn').classList.toggle('hidden',!!st.widget_ready);
+  if(!$('tab-widget').classList.contains('hidden'))wgRender();
 }
 
 /* ---------------- base images ---------------- */
 let BASE_CACHE=null;
-async function loadBases(){BASE_CACHE=await api('/api/base-images');renderBases(BASE_CACHE);}
+async function loadBases(){BASE_CACHE=await api('/api/base-images');renderBases(BASE_CACHE);wgPreviewBg();}
 function renderBases(r){
   if(!r)return;const el=$('base-list');
   el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">'+t('t_no_base')+'</div>';
@@ -627,7 +732,7 @@ $('genb-go').onclick=async()=>{
 
 /* ---------------- gallery (two-level: base → generated) ---------------- */
 let WALL_CACHE=null,WALL_GROUP=null;
-async function loadWalls(){WALL_CACHE=await api('/api/wallpapers');renderWalls(WALL_CACHE);}
+async function loadWalls(){WALL_CACHE=await api('/api/wallpapers');renderWalls(WALL_CACHE);wgPreviewBg();}
 function renderWalls(r){
   if(!r)return;
   const groups=r.groups||[],el=$('wall-list'),chips=$('wall-groups');
@@ -774,6 +879,18 @@ function fillForm(cfg){
   $('gen-size').value=cfg.generator?.size||'auto';
   $('gen-prompt').value=cfg.generator?.prompt||'';
   LANG=cfg.ui?.language||'en';$('cfg-lang').value=LANG;
+  const wg=cfg.widget||{};
+  $('wg-enable').checked=!!wg.enabled;
+  $('wg-style').value=wg.style||'glass';
+  $('wg-opacity').value=Math.round(((wg.bg_opacity??0.55))*100);
+  $('wg-op-v').textContent=$('wg-opacity').value+'%';
+  $('wg-scale').value=Math.round((wg.scale??1)*100);
+  $('wg-scale-v').textContent=(+$('wg-scale').value/100).toFixed(1);
+  WGPOS={x:+((wg.position||{}).x??0.94),y:+((wg.position||{}).y??0.08)};
+  wgPlace();
+  $('wg-fields').innerHTML='';
+  (wg.fields&&wg.fields.length?wg.fields:['{city}']).forEach(f=>wgAddField(String(f)));
+  wgRender();
   applyI18n();
 }
 $('btn-save-gen').onclick=async()=>{
@@ -790,6 +907,15 @@ $('btn-save-gen').onclick=async()=>{
     size:$('gen-size').value,prompt:$('gen-prompt').value}}});
     toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
 $('gen-key').oninput=()=>{$('gen-key').style.borderColor='';};
+async function loadGenModels(){
+  try{
+    const r=await api('/api/gen-models');
+    const dl=$('model-options');dl.innerHTML='';
+    (r.models||[]).forEach(m=>{const o=document.createElement('option');o.value=m;dl.appendChild(o);});
+  }catch(e){/* base_url/key 未配置或网络不通: 静默保留手输 */}
+}
+$('gen-base-url').addEventListener('change',loadGenModels);
+$('gen-key').addEventListener('change',loadGenModels);
 $('btn-save-weather').onclick=async()=>{try{await api('/api/config',{config:{weather:collectWeather(),
   region:$('cfg-region').value,network:{proxy:$('cfg-proxy').value.trim()}}});
   toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
@@ -820,6 +946,84 @@ $('btn-test').onclick=async()=>{try{const r=await api('/api/test-weather',{force
   <div class="kv"><span class="k">Prompt</span><span class="v" style="font-size:12px;color:var(--muted)">${esc(r.prompt)}</span></div>`;
   }catch(e){toast(e.message,true)}};
 
+/* ---------------- widget (info overlay) ---------------- */
+let WGPOS={x:0.94,y:0.08};
+const getFieldInputs=()=>[...document.querySelectorAll('#wg-fields input')].map(i=>i.value);
+
+function wgSample(){
+  const w=ST_CACHE?.state?.last_weather||{city:LANG==='zh'?'杭州市':'Hangzhou',temp_current:22,temp_min:18,temp_max:28};
+  const tg=ST_CACHE?.state?.last_tags||{weather:'cloudy',hours:'1216',temp:'20-25',temp_min:18,temp_max:28,solarterm:'colddew'};
+  const n=new Date();
+  return{city:w.city||'—',temp:Math.round(w.temp_current??0),temp_min:Math.round(w.temp_min??0),
+    temp_max:Math.round(w.temp_max??0),weather:tg.weather,weather_name:WX_NAME[LANG][tg.weather]||tg.weather,
+    hours:tg.hours,solarterm:tg.solarterm,solarterm_name:ST_NAME[LANG][tg.solarterm]||tg.solarterm,
+    time:n.toTimeString().slice(0,5),date:n.toISOString().slice(0,10)};
+}
+function wgFillLine(s){const r=wgSample();let out=String(s);for(const k in r)out=out.replaceAll('{'+k+'}',r[k]);return out;}
+
+function wgRender(){
+  const dg=$('wg-drag'),style=$('wg-style').value;
+  dg.className='wg-drag wgstyle-'+style;
+  dg.style.setProperty('--wgo',(+$('wg-opacity').value)/100);
+  const sc=+$('wg-scale').value/100;
+  dg.style.fontSize=Math.max(7,Math.min(30,13*sc))+'px';
+  const lines=getFieldInputs().map(v=>v.trim()).filter(Boolean).map(wgFillLine);
+  dg.innerHTML=lines.map((s,i)=>i===0?`<div class="t">${esc(s)}</div>`:`<div>${esc(s)}</div>`).join('')||'—';
+}
+function wgPlace(){
+  $('wg-drag').style.left=(WGPOS.x*100)+'%';
+  $('wg-drag').style.top=(WGPOS.y*100)+'%';
+}
+function wgAddField(v=''){
+  const row=document.createElement('div');row.className='wg-row';
+  row.innerHTML=`<input type="text" value="${esc(v)}">
+    <button class="op" data-a="up" title="up">↑</button>
+    <button class="op" data-a="dn" title="down">↓</button>
+    <button class="op" data-a="del" title="✕">✕</button>`;
+  row.querySelector('[data-a=up]').onclick=()=>row.previousElementSibling&&row.parentNode.insertBefore(row,row.previousElementSibling);
+  row.querySelector('[data-a=dn]').onclick=()=>row.nextElementSibling&&row.parentNode.insertBefore(row.nextElementSibling,row);
+  row.querySelector('[data-a=del]').onclick=()=>{row.remove();wgRender();};
+  row.querySelector('input').oninput=wgRender;
+  $('wg-fields').appendChild(row);
+}
+function wgPreviewBg(){
+  /* 预览背景优先跟随当前生效的基准图, 没有再回落最新壁纸 */
+  let url=null;
+  if(BASE_CACHE&&BASE_CACHE.active)url='/api/base-image-file?name='+encodeURIComponent(BASE_CACHE.active);
+  const g=WALL_CACHE&&WALL_CACHE.groups&&WALL_CACHE.groups[0];
+  if(!url&&g&&g.items&&g.items.length)url='/api/wallpaper-file?name='+encodeURIComponent(g.items[0].name);
+  if(url)$('wg-preview').style.backgroundImage=`url(${url})`;
+}
+(function(){
+  const pv=$('wg-preview'),dg=$('wg-drag');
+  /* position 语义 = 挂件盒中心点(0~1), 拖动时指针位置即新的中心 */
+  const setFromEvent=e=>{
+    const r=pv.getBoundingClientRect();
+    WGPOS.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+    WGPOS.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+    wgPlace();
+  };
+  let dragging=false;
+  dg.addEventListener('pointerdown',e=>{
+    if($('wg-style').value==='banner')return;
+    dragging=true;dg.setPointerCapture(e.pointerId);setFromEvent(e);e.preventDefault();
+  });
+  dg.addEventListener('pointermove',e=>{if(dragging)setFromEvent(e);});
+  dg.addEventListener('pointerup',()=>dragging=false);
+  dg.addEventListener('pointercancel',()=>dragging=false);
+})();
+$('wg-style').onchange=wgRender;
+$('wg-opacity').oninput=()=>{$('wg-op-v').textContent=$('wg-opacity').value+'%';wgRender();};
+$('wg-scale').oninput=()=>{$('wg-scale-v').textContent=(+$('wg-scale').value/100).toFixed(1);};
+$('wg-add').onclick=()=>{wgAddField('');$('wg-fields').lastElementChild.querySelector('input').focus();};
+$('btn-save-widget').onclick=async()=>{
+  const fields=getFieldInputs().map(v=>v.trim()).filter(Boolean);
+  try{await api('/api/config',{config:{widget:{
+    enabled:$('wg-enable').checked,style:$('wg-style').value,
+    bg_opacity:(+$('wg-opacity').value)/100,scale:(+$('wg-scale').value)/100,
+    position:{x:+WGPOS.x.toFixed(3),y:+WGPOS.y.toFixed(3)},fields}}});
+    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
+
 /* ---------------- init ---------------- */
 (async function init(){
   try{
@@ -830,6 +1034,9 @@ $('btn-test').onclick=async()=>{try{const r=await api('/api/test-weather',{force
     renderStatus(ST_CACHE);
   }catch(e){toast(e.message,true)}
   loadStatus();loadBases();loadWalls();
+  loadGenModels();
+  wgRender();wgPlace();
+  setTimeout(()=>{wgPreviewBg();wgRender();},800);
   setInterval(loadStatus,15000);
 })();
 </script>

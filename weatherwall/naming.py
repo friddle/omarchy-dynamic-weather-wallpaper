@@ -14,6 +14,36 @@ from pathlib import Path
 from .solarterm import current_term
 from .weather import WEATHER_TAG_CN
 
+# 时段(按本地小时): 用于 prompt 的昼夜描述与降级调色
+DAYPART_EN = {
+    "dawn": "Dawn", "morning": "Morning", "noon": "Noon", "afternoon": "Afternoon",
+    "evening": "Evening", "night": "Night", "latenight": "Late Night",
+}
+DAYPART_CN = {
+    "dawn": "清晨", "morning": "上午", "noon": "中午", "afternoon": "下午",
+    "evening": "傍晚", "night": "晚上", "latenight": "深夜",
+}
+
+
+def daypart_of(hour: int) -> str:
+    if 5 <= hour < 8:
+        return "dawn"
+    if 8 <= hour < 11:
+        return "morning"
+    if 11 <= hour < 14:
+        return "noon"
+    if 14 <= hour < 18:
+        return "afternoon"
+    if 18 <= hour < 20:
+        return "evening"
+    if 20 <= hour < 23:
+        return "night"
+    return "latenight"
+
+
+def daypart_display(tag: str, lang: str = "en") -> str:
+    return DAYPART_EN.get(tag, tag) if lang == "en" else DAYPART_CN.get(tag, tag)
+
 
 def temp_label(info: dict, naming_cfg: dict) -> str:
     mode = (naming_cfg.get("temp_mode") or "band").lower()
@@ -37,6 +67,7 @@ def hours_label(now, naming_cfg: dict) -> str:
 
 def compose_tags(info: dict, now, naming_cfg: dict) -> dict:
     term_cn, term_en = current_term(now.date())
+    daypart = daypart_of(now.hour)
     return {
         "weather": info["tag"],
         "weather_cn": WEATHER_TAG_CN.get(info["tag"], info["tag"]),
@@ -47,6 +78,11 @@ def compose_tags(info: dict, now, naming_cfg: dict) -> dict:
         "temp_max": round(float(info.get("temp_max", 0))),
         "solarterm": term_en,
         "solarterm_cn": term_cn,
+        "time": now.strftime("%H:%M"),
+        "date": now.strftime("%Y-%m-%d"),
+        "daypart": daypart,
+        "daypart_en": DAYPART_EN[daypart],
+        "daypart_cn": DAYPART_CN[daypart],
     }
 
 
@@ -86,6 +122,7 @@ def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str 
         "solarterm_name": solarterm_display(tags["solarterm"], lang),
         "solarterm_en": solarterm_display(tags["solarterm"], "en"),
         "solarterm_cn": solarterm_display(tags["solarterm"], "zh"),
+        "daypart_name": daypart_display(tags.get("daypart", ""), lang),
         "city": city,
         "base_name": base_name,
     }

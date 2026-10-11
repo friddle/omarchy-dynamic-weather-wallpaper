@@ -230,8 +230,11 @@ class TestConfig(unittest.TestCase):
                 with mock.patch("weatherwall.config.config_file", return_value=f):
                     cfg = config.load_config()
                 self.assertEqual(cfg["generator"]["prompt"], config.DEFAULT_PROMPT)
-            # 新默认包含天空日月星描述
-            self.assertIn("sun, moon or stars", config.DEFAULT_PROMPT)
+            # 新默认带昼夜与本地时间占位符
+            self.assertIn("{daypart_name}", config.DEFAULT_PROMPT)
+            self.assertIn("{time}", config.DEFAULT_PROMPT)
+            # 上一版默认(含 sun, moon or stars)已列入自动迁移
+            self.assertTrue(any("sun, moon or stars" in p for p in config.LEGACY_PROMPTS))
             # 已自定义的 prompt 不被覆盖
             f.write_text(json.dumps({"generator": {"prompt": "my own {temp}"}}), encoding="utf-8")
             with mock.patch("weatherwall.config.config_file", return_value=f):
@@ -263,6 +266,185 @@ class TestDisplayI18n(unittest.TestCase):
         self.assertEqual((hz["cn"], hz["code"]), ("杭州", "101210101"))
         self.assertEqual(find_china_city("Hangzhou")["cn"], "杭州")
         self.assertIsNone(find_china_city("Nowhere"))
+
+
+class TestDegradedGeneration(unittest.TestCase):
+    """生图失败时降级直用基准图，轮次不中断，且不污染缓存。"""
+
+    def test_generation_failure_falls_back_to_base(self):
+        import json
+        import threading
+        from weatherwall import app as app_mod
+        from weatherwall.app import App
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bdir = root / "base_images"
+            bdir.mkdir()
+            (bdir / "base.png").write_bytes(b"PNGDATA")
+            cdir = root / "cache"
+            cdir.mkdir()
+            cfg = json.loads(json.dumps(config.DEFAULT_CONFIG))
+            cfg["base_image"] = "base.png"
+            cfg["weather"]["city"] = "hangzhou"
+            app = App.__new__(App)  # 不跑完整 __init__
+            app._lock = threading.Lock()
+            app.state = {"log": []}
+            app.log = lambda msg: None
+            info = {"tag": "sunny", "desc": "Sunny", "temp_current": 20.0,
+                    "temp_min": 10.0, "temp_max": 25.0, "city": "Hangzhou",
+                    "provider": "test"}
+            with mock.patch.object(config, "base_images_dir", return_value=bdir), \
+                 mock.patch.object(config, "cache_dir", return_value=cdir), \
+                 mock.patch.object(config, "state_file", return_value=root / "state.json"), \
+                 mock.patch.object(config, "config_file", return_value=root / "config.json"), \
+                 mock.patch.object(config, "config_dir", return_value=root), \
+                 mock.patch.object(app_mod.region, "resolve_region", return_value="china"), \
+                 mock.patch.object(app_mod, "fetch_weather", return_value=info), \
+                 mock.patch.object(app_mod.generate, "generate_image",
+                                   side_effect=RuntimeError("boom")), \
+                 mock.patch.object(app_mod.wallpaper, "set_wallpaper") as sw:
+                res = app.run_once(apply=True)
+                self.assertTrue(res["ok"])
+                self.assertTrue(res["degraded"])
+                self.assertEqual(res["file"], str(bdir / "base.png"))
+                sw.assert_called_once()
+                self.assertEqual(app.state["last_gen_error"], "boom")
+                self.assertIsNone(app.state["last_error"])
+                self.assertTrue(app.state["last_applied"])
+                # 降级结果不写入缓存，接口恢复后可正常生成
+                self.assertEqual([p for p in cdir.rglob("*") if p.is_file()], [])
+
+    def test_generation_failure_without_base_raises(self):
+        import json
+        import threading
+        from weatherwall import app as app_mod
+        from weatherwall.app import App
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bdir = root / "base_images"
+            bdir.mkdir()
+            cdir = root / "cache"
+            cdir.mkdir()
+            cfg = json.loads(json.dumps(config.DEFAULT_CONFIG))  # 无基准图
+            app = App.__new__(App)
+            app._lock = threading.Lock()
+            app.state = {"log": []}
+            app.log = lambda msg: None
+            info = {"tag": "sunny", "desc": "Sunny", "temp_current": 20.0,
+                    "temp_min": 10.0, "temp_max": 25.0, "city": "x",
+                    "provider": "test"}
+            with mock.patch.object(config, "base_images_dir", return_value=bdir), \
+                 mock.patch.object(config, "cache_dir", return_value=cdir), \
+                 mock.patch.object(config, "state_file", return_value=root / "state.json"), \
+                 mock.patch.object(config, "config_file", return_value=root / "config.json"), \
+                 mock.patch.object(config, "config_dir", return_value=root), \
+                 mock.patch.object(app_mod.region, "resolve_region", return_value="china"), \
+                 mock.patch.object(app_mod, "fetch_weather", return_value=info), \
+                 mock.patch.object(app_mod.generate, "generate_image",
+                                   side_effect=RuntimeError("boom")):
+                with self.assertRaises(RuntimeError):
+                    app.run_once(apply=True)
+
+
+class TestWidget(unittest.TestCase):
+    def test_fill_lines(self):
+        import datetime as dt
+        from weatherwall import widget
+        info = {"city": "Hangzhou", "temp_current": 23.4, "temp_min": 12.0, "temp_max": 23.0}
+        tags = {"weather": "rain", "hours": "1216", "temp": "20-25", "temp_value": 23,
+                "temp_min": 12, "temp_max": 23, "solarterm": "springbegin"}
+        now = dt.datetime(2026, 2, 5, 13, 5)
+        lines = widget.fill_lines(
+            ["{city}", "{weather_name} {temp}°C", "自己加的话语 {time}", ""],
+            info, tags, now, "en")
+        self.assertEqual(lines, ["Hangzhou", "Rain 23°C", "自己加的话语 13:05"])
+        # 未知占位符原样保留
+        self.assertEqual(widget.fill_lines(["{nope}"], info, tags, now, "en"), ["{nope}"])
+        # 全空行 -> 空列表
+        self.assertEqual(widget.fill_lines(["", "  "], info, tags, now, "en"), [])
+
+    def test_layout_clamps_and_banner(self):
+        from weatherwall import widget
+        lay = widget.layout(["a", "b"], 800, 500,
+                            {"style": "glass", "scale": 1.0, "position": {"x": 0.9, "y": 0.9}})
+        bx, by, bw, bh = lay["box"]
+        self.assertLessEqual(bx + bw, 800)
+        self.assertLessEqual(by + bh, 500)
+        ban = widget.layout(["a"], 800, 500, {"style": "banner"})
+        self.assertEqual(ban["box"][1] + ban["box"][3], 500)  # banner 紧贴底部
+
+    def test_ffargs_styles(self):
+        from weatherwall import widget
+        import datetime as dt
+        now = dt.datetime(2026, 10, 11, 12, 0)
+        info = {"city": "x", "temp_current": 1, "temp_min": 0, "temp_max": 2}
+        tags = {"weather": "sunny", "hours": "1200", "temp": "0-5", "temp_value": 1,
+                "temp_min": 0, "temp_max": 2, "solarterm": "colddew"}
+        lines = widget.fill_lines(["{city}"], info, tags, now, "en")
+        for style in ("glass", "card", "minimal", "banner"):
+            wcfg = {"style": style, "bg_opacity": 0.55, "scale": 1.0,
+                    "position": {"x": 0.05, "y": 0.66}}
+            lay = widget.layout(lines, 800, 500, wcfg)
+            with tempfile.TemporaryDirectory() as td:
+                args = widget._ffargs(lay, wcfg, "/f.ttf", Path(td), 800)
+            self.assertIn("drawtext", " ".join(args), style)
+            if style == "glass":
+                self.assertIn("boxblur", " ".join(args))
+            if style == "minimal":
+                self.assertNotIn("drawbox", " ".join(args))
+
+
+class TestDaypart(unittest.TestCase):
+    def test_daypart_of(self):
+        cases = {6: "dawn", 9: "morning", 12: "noon", 15: "afternoon",
+                 18: "evening", 21: "night", 23: "latenight", 2: "latenight"}
+        for hour, tag in cases.items():
+            self.assertEqual(naming.daypart_of(hour), tag, f"hour {hour}")
+
+    def test_compose_tags_time_and_daypart(self):
+        info = {"tag": "rain", "temp_current": 10.0, "temp_min": 5.0, "temp_max": 12.0}
+        tags = naming.compose_tags(info, dt.datetime(2026, 10, 11, 18, 15), {})
+        self.assertEqual(tags["time"], "18:15")
+        self.assertEqual(tags["daypart"], "evening")
+        self.assertEqual(tags["daypart_cn"], "傍晚")
+        out = naming.fill_prompt("{daypart_name}|{time}", tags, "杭州市", "b", lang="zh")
+        self.assertEqual(out, "傍晚|18:15")
+
+
+class TestSchedulerHelpers(unittest.TestCase):
+    def test_is_network_error(self):
+        from weatherwall.app import is_network_error
+        self.assertTrue(is_network_error(
+            "所有天气源均失败 -> itboy: <urlopen error [Errno -3] Temporary failure in name resolution>"))
+        self.assertTrue(is_network_error("Name or service not known"))
+        self.assertTrue(is_network_error("[Errno 101] Network is unreachable"))
+        # 连接超时/被拒不算网络未就绪(可能是对端问题)
+        self.assertFalse(is_network_error("生图接口连接失败: [Errno 110] Connection timed out"))
+        self.assertFalse(is_network_error("生图接口 HTTP 401"))
+        self.assertFalse(is_network_error(""))
+
+
+class TestResolutionFit(unittest.TestCase):
+    def test_resolve_size(self):
+        from weatherwall.app import resolve_size
+        self.assertEqual(resolve_size("auto", (3840, 2160)), "3840x2160")
+        self.assertEqual(resolve_size("", (1920, 1080)), "1920x1080")
+        self.assertEqual(resolve_size("auto", None), "auto")     # 检测失败回落接口默认
+        self.assertEqual(resolve_size("1536x1024", (3840, 2160)), "1536x1024")
+
+    def test_fit_to_cover_crop(self):
+        import unittest.mock as m
+        from weatherwall import widget, generate
+        if not widget.available():
+            self.skipTest("ffmpeg 不可用")
+        raw = generate.make_placeholder_png((1600, 1000))
+        data, ext = widget.fit_to(raw, 800, 600)
+        self.assertEqual(ext, "jpg")
+        self.assertEqual(widget._probe_size(data), (800, 600))
+        # 已是目标尺寸: 原样返回不重压缩
+        same, ext2 = widget.fit_to(data, 800, 600)
+        self.assertEqual(ext2, "jpg")
+        self.assertEqual(widget._probe_size(same), (800, 600))
 
 
 if __name__ == "__main__":

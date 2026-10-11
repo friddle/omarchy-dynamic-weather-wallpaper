@@ -2,9 +2,11 @@
 
 macOS   : osascript System Events (按 desktop 序号可指定单个显示器/空间)
 Windows : PowerShell SystemParametersInfo(SPI_SETDESKWALLPAPER) — 单显示器
-Linux   : swww(Hyprland, -o 指定输出) -> hyprpaper -> gsettings -> feh
+Linux   : omarchy(Omarchy 背景, 系统级联动) -> swww(Hyprland, -o 指定输出)
+          -> hyprpaper -> gsettings -> feh；每一步都检查结果，失败继续回落
 
 displays 参数: "all"(默认) 或 序号列表 [1,3] (对应 /api/displays 返回的 index)
+omarchy/swww 之外注意: Omarchy 系统背景机制作用于全部显示器，不支持按序号选择。
 """
 
 import json
@@ -80,6 +82,32 @@ def list_displays() -> list[dict]:
         return _list_displays_linux()
     except Exception as e:  # noqa: BLE001 - 枚举失败不影响主流程
         raise WallpaperError(str(e)) from e
+
+
+def display_resolution() -> tuple[int, int] | None:
+    """主显示器(分辨率最高那块)的像素分辨率; 检测失败返回 None。"""
+    if shutil.which("hyprctl"):
+        try:
+            mons = json.loads(_run(["hyprctl", "-j", "monitors"]).stdout or "[]")
+            if mons:
+                m = max(mons, key=lambda d: int(d.get("width", 0)) * int(d.get("height", 0)))
+                w, h = int(m.get("width", 0)), int(m.get("height", 0))
+                if w > 0 and h > 0:
+                    return w, h
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    if shutil.which("xrandr"):
+        try:
+            import re
+            r = _run(["xrandr", "--current"])
+            for line in r.stdout.splitlines():
+                if " connected" in line and "*" in line:
+                    m = re.search(r"(\d+)x(\d+)\s+\d+\.\d+\*", line)
+                    if m:
+                        return int(m.group(1)), int(m.group(2))
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return None
 
 
 # ---------- 壁纸设置 ----------
@@ -164,6 +192,12 @@ def _linux_output_names(indices: list[int]) -> list[str]:
 
 def _set_linux(path: Path, indices: list[int]) -> None:
     p = str(path.resolve())
+    # Omarchy: 走系统背景机制(更新 current/background 软链并通知 shell 插件),
+    # 与主题切换/时间壁纸联动；系统级生效于全部显示器
+    if shutil.which("omarchy"):
+        r = _run(["omarchy", "theme", "bg", "set", p])
+        if r.returncode == 0:
+            return
     if shutil.which("swww"):
         cmd = ["swww", "img", p, "--transition-type", "grow", "--transition-duration", "1.5"]
         outputs = _linux_output_names(indices) if indices else []
@@ -173,27 +207,30 @@ def _set_linux(path: Path, indices: list[int]) -> None:
             r = _run(cmd)
         if r.returncode == 0:
             return
-    if shutil.which("hyprctl"):
+    # hyprpaper 未运行时 hyprctl 会返回非零，必须检查而不是盲改后直接返回
+    if shutil.which("hyprctl") and shutil.which("hyprpaper"):
         try:
-            _run(["hyprctl", "hyprpaper", "preload", p])
+            preload = _run(["hyprctl", "hyprpaper", "preload", p])
             mons = json.loads(_run(["hyprctl", "-j", "monitors"]).stdout or "[]")
             targets = [m["name"] for m in mons if not indices or m.get("id", -1) + 1 in indices
                        or mons.index(m) + 1 in indices]
-            for name in targets:
-                _run(["hyprctl", "hyprpaper", "wallpaper", f"{name},{p}"])
-            _run(["hyprctl", "hyprpaper", "unload", p])
-            return
+            if preload.returncode == 0 and targets and all(
+                    _run(["hyprctl", "hyprpaper", "wallpaper", f"{name},{p}"]).returncode == 0
+                    for name in targets):
+                return
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
     if shutil.which("gsettings"):
         uri = "file://" + p
-        _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri])
-        _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri])
-        return
+        r1 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", uri])
+        r2 = _run(["gsettings", "set", "org.gnome.desktop.background", "picture-uri-dark", uri])
+        if r1.returncode == 0 and r2.returncode == 0:
+            return
     if shutil.which("feh"):
-        _run(["feh", "--bg-fill", p])
-        return
-    raise WallpaperError("未找到可用的壁纸工具 (swww/hyprpaper/gsettings/feh)")
+        r = _run(["feh", "--bg-fill", p])
+        if r.returncode == 0:
+            return
+    raise WallpaperError("壁纸设置失败: 未找到可用的壁纸工具 (omarchy/swww/hyprpaper/gsettings/feh) 或全部执行失败")
 
 
 def set_wallpaper(path: Path, displays=None) -> None:

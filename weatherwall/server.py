@@ -51,7 +51,9 @@ SAFE_NAME = re.compile(r"^[^/\\]+$")
 
 
 def _safe_file(root: Path, name: str) -> Path | None:
-    """支持一层子目录(两层壁纸库 wallpapers/{base}/{file}.jpg)，防目录穿越。"""
+    """支持一层子目录(两层壁纸库 wallpapers/{base}/{file}.jpg)，防目录穿越。
+    Windows 反斜杠统一为正斜杠(图库接口全程使用 posix 风格相对路径)。"""
+    name = (name or "").replace("\\", "/")
     if not name or ".." in name:
         return None
     parts = name.split("/")
@@ -82,14 +84,15 @@ def _unique_name(root: Path, name: str) -> str:
 
 
 def _grouped_wallpapers() -> list[dict]:
-    """两层壁纸库: [{base, items:[...]}, ...] 按基准图前缀分组。"""
+    """两层壁纸库: [{base, items:[...]}, ...] 按基准图前缀分组。
+    rel 统一 posix 风格(Windows 下 relative_to 产生反斜杠会导致分组/预览失效)。"""
     root = config.cache_dir()
     groups: dict[str, list] = {}
     if root.exists():
         for p in sorted(root.rglob("*")):
             if not p.is_file() or p.suffix.lower() not in config.WALLPAPER_EXTS:
                 continue
-            rel = str(p.relative_to(root))
+            rel = p.relative_to(root).as_posix()
             base = rel.split("/", 1)[0] if "/" in rel else "(misc)"
             groups.setdefault(base, []).append(_image_entry(p, rel))
     out = []
@@ -154,6 +157,22 @@ def make_handler(app: App) -> type:
                                 "default_base_prompt": config.DEFAULT_BASE_PROMPT})
                 elif url.path == "/api/wallpapers":
                     self._json({"ok": True, "groups": _grouped_wallpapers()})
+                elif url.path == "/api/gen-models":
+                    # 拉取生图接口的模型列表(/models), 供设置页下拉
+                    cfg = config.load_config()
+                    g = cfg["generator"]
+                    base = (g.get("base_url") or "").rstrip("/")
+                    if not base:
+                        return self._json({"ok": False, "error": "base_url 未配置"}, 400)
+                    key = (g.get("api_key") or "").strip()
+                    headers = {"Authorization": f"Bearer {key}"} if key else {}
+                    try:
+                        data = net.http_json(base + "/models", timeout=15, headers=headers)
+                        ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                    except Exception as e:  # noqa: BLE001
+                        return self._json({"ok": False, "error": str(e)[:200]})
+                    self._json({"ok": True, "models": ids})
+
                 elif url.path == "/api/displays":
                     self._json({"ok": True,
                                 "displays": wallpaper.list_displays(),
@@ -253,7 +272,7 @@ def make_handler(app: App) -> type:
                     result = {}
 
                     def work():
-                        result["res"] = app.run_guarded(apply=apply_)
+                        result["res"] = app.run_guarded(apply=apply_, force=force)
 
                     t = threading.Thread(target=work)
                     t.start()
@@ -273,7 +292,25 @@ def make_handler(app: App) -> type:
                     if not p:
                         return self._json({"ok": False, "error": "文件不存在"}, 404)
                     displays = config.load_config().get("wallpaper", {}).get("displays", "all")
-                    wallpaper.set_wallpaper(p, displays=displays)
+                    target = p
+                    wcfg = config.load_config().get("widget") or {}
+                    if wcfg.get("enabled"):
+                        # 图库点击也走挂件合成(字段值用最近一轮的天气/标签)
+                        try:
+                            from . import widget as infowidget
+                            info = dict(app.state.get("last_weather") or {})
+                            tags = dict(app.state.get("last_tags") or {})
+                            if info and tags:
+                                wdata, wext = infowidget.compose(
+                                    p.read_bytes(), wcfg, info, tags, dt.datetime.now(),
+                                    lang=str((config.load_config().get("ui") or {}).get("language") or "en"))
+                                out = config.applied_dir() / f"{p.stem}.{wext}"
+                                out.parent.mkdir(parents=True, exist_ok=True)
+                                out.write_bytes(wdata)
+                                target = out
+                        except Exception as e:  # noqa: BLE001 - 挂件失败不影响壁纸
+                            app.log(f"挂件合成失败，使用原图: {e}")
+                    wallpaper.set_wallpaper(target, displays=displays)
                     app.log(f"手动应用壁纸: {name} (显示器: {displays})")
                     self._json({"ok": True})
 
