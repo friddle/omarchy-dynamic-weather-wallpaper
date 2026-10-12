@@ -346,6 +346,10 @@ def make_handler(app: App) -> type:
                 elif url.path == "/api/cities":
                     self._json({"ok": True, "china": china_cities(), "us": US_CITIES})
                 elif url.path == "/api/status":
+                    # 免鉴权视图: 已剔除代理(可能含凭据)/日志/错误详情
+                    self._json(app.public_status())
+                elif url.path == "/api/status-full":
+                    # 完整视图(代理、日志等)一律要求 X-Token
                     self._json(app.status())
                 elif url.path == "/api/config":
                     cfg = config.load_config()

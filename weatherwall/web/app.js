@@ -75,7 +75,9 @@ $('cfg-lang').onchange=()=>setLang($('cfg-lang').value);
 let ST_CACHE=null;
 async function loadStatus(){
   try{
-    const st=await api('/api/status');ST_CACHE=st;renderStatus(st);
+    /* 有令牌走完整视图(含代理/日志); 无令牌(手动未登录)走公开脱敏视图 */
+    const st=await api(APITOKEN?'/api/status-full':'/api/status');
+    ST_CACHE=st;renderStatus(st);
   }catch(e){toast(e.message,true)}
 }
 function renderStatus(st){

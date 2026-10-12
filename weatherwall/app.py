@@ -95,7 +95,8 @@ class App:
 
             # 1. 区域(读温度+时间的通道选择)
             reg = region.resolve_region(cfg)
-            self.log(f"区域: {reg} (配置={cfg['region']}, 代理={cfg['network'].get('proxy') or '无'})")
+            self.log(f"区域: {reg} (配置={cfg['region']}, "
+                     f"代理={mask_proxy(cfg['network'].get('proxy')) or '无'})")
 
             # 2. 天气
             info = fetch_weather(cfg, reg)
@@ -406,6 +407,35 @@ class App:
     def stop(self) -> None:
         self._stop.set()
 
+    def public_status(self) -> dict:
+        """免鉴权 /api/status 的脱敏视图(顶栏挂件/未登录设置页使用)。
+
+        排除一切可能携带凭据的字段: 代理配置(可能是 http://user:pass@host 形式)、
+        日志与错误详情(可能记录带凭据的 URL)。完整视图走需令牌的 /api/status-full。
+        """
+        full = self.status()
+        st = full.get("state") or {}
+        return {
+            "version": full.get("version"),
+            "platform": full.get("platform"),
+            "region_setting": full.get("region_setting"),
+            "region_detected": full.get("region_detected"),
+            "refresh_minutes": full.get("refresh_minutes"),
+            "base_image": full.get("base_image", ""),
+            "base_image_exists": full.get("base_image_exists", False),
+            "has_api_key": full.get("has_api_key", False),
+            "widget_ready": full.get("widget_ready", False),
+            "ffmpeg_found": full.get("ffmpeg_found", False),
+            "ffmpeg_drawtext": full.get("ffmpeg_drawtext", False),
+            "ffmpeg_install_running": full.get("ffmpeg_install_running", False),
+            "calendar_event_days": full.get("calendar_event_days", 0),
+            "calendar_event_count": full.get("calendar_event_count", 0),
+            "precache": full.get("precache", {}),
+            "state": {k: st.get(k) for k in
+                      ("last_run", "last_weather", "last_stem", "last_cached",
+                       "last_applied", "has_base_image") if k in st},
+        }
+
     def status(self) -> dict:
         cfg = config.load_config()
         rc = region.region_cache()
@@ -445,6 +475,12 @@ class App:
 
 def region_net_proxy(cfg: dict) -> str:
     return str((cfg.get("network") or {}).get("proxy") or "").strip()
+
+
+def mask_proxy(url: str) -> str:
+    """日志用: 抹掉代理 URL 里的 userinfo(http://user:pass@host:port -> http://***@host:port)。"""
+    import re
+    return re.sub(r"(//)([^/@:]+):([^/@]+)@", r"\1***:***@", url or "")
 
 
 def ref_image_paths(limit: int = 4) -> list[Path]:

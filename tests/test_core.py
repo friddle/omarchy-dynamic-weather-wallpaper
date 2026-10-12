@@ -780,6 +780,61 @@ class TestLocalTokenSecurity(unittest.TestCase):
         # session-token 端点存在且免 X-Token(内核 UID 校验兜底)
         self.assertIn("/api/session-token", srv._OPEN_PATHS)
 
+    def test_public_status_sanitized(self):
+        """第四审: 免鉴权 /api/status 不得泄露代理凭据/日志/错误详情; full 需令牌。"""
+        import json
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from weatherwall import server as srv
+        from weatherwall.app import App
+        srv._TOKEN = "unit-test-token"
+        app = App.__new__(App)
+        secret = "http://john:secret123@proxy.corp:8080"
+        app.state = {"log": [], "last_error": None}
+        app.log = lambda msg: None
+        cfg = json.loads(json.dumps(config.DEFAULT_CONFIG))
+        cfg["network"]["proxy"] = secret
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(app))
+        port = httpd.server_address[1]
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            with mock.patch.object(config, "load_config", return_value=cfg), \
+                 mock.patch.object(app, "state",
+                                   {"log": [f"区域: x 代理={secret}"],
+                                    "last_error": f"boom via {secret}"}):
+                # 公开视图: 无凭据、无 log/proxy 键
+                with urllib.request.urlopen(
+                        f"http://127.0.0.1:{port}/api/status", timeout=15) as r:
+                    pub = r.read().decode("utf-8")
+                self.assertNotIn("secret123", pub)
+                self.assertNotIn("john", pub)
+                pub_keys = json.loads(pub)
+                self.assertNotIn("proxy", pub_keys)
+                self.assertNotIn("log", pub_keys)
+                # 完整视图: 无令牌 401; 带令牌可见(仅本用户)
+                try:
+                    urllib.request.urlopen(
+                        f"http://127.0.0.1:{port}/api/status-full", timeout=15)
+                    self.fail("status-full should require token")
+                except urllib.error.HTTPError as e:
+                    self.assertEqual(e.code, 401)
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/api/status-full",
+                    headers={"X-Token": "unit-test-token"})
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    full = json.loads(r.read())
+                self.assertEqual(full.get("proxy"), secret)
+        finally:
+            httpd.shutdown()
+
+    def test_mask_proxy(self):
+        from weatherwall.app import mask_proxy
+        self.assertEqual(mask_proxy("http://user:pass@p:1"), "http://***:***@p:1")
+        self.assertEqual(mask_proxy("http://p:1"), "http://p:1")
+        self.assertEqual(mask_proxy(""), "")
+
     def test_session_token_self_uid(self):
         """集成: 临时 HTTP 服务上, 同 UID 进程取 /api/session-token 应拿到令牌。"""
         import json
