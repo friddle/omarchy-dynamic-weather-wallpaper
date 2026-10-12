@@ -20,6 +20,15 @@ Panel {
 
   readonly property string pluginDir: (Quickshell.env("HOME") || "") + "/.config/omarchy/plugins/" + moduleName
   readonly property string serverUrl: "http://127.0.0.1:8765"
+  // 图片端点需令牌(<img> 无法带 header, 经查询参数 ?t= 附带); token 文件仅本用户可读
+  readonly property string token: tokenFile.text ? tokenFile.text.trim() : ""
+
+  FileView {
+    id: tokenFile
+    path: (Quickshell.env("HOME") || "") + "/.config/omarchy-dynamic-wallpaper/token"
+    blockLoading: false
+    watchChanges: false
+  }
 
   property var status: null
   property bool online: false
@@ -280,7 +289,7 @@ Panel {
               anchors.fill: parent
               anchors.margins: Style.space(2)
               source: root.online && root.baseImageName !== ""
-                ? root.serverUrl + "/api/base-image-file?name=" + root.baseImageName : ""
+                ? root.serverUrl + "/api/base-image-file?name=" + root.baseImageName + "&t=" + root.token : ""
               fillMode: Image.PreserveAspectCrop
               asynchronous: true
               cache: false

@@ -121,3 +121,6 @@ textarea{resize:vertical;min-height:96px}
 .modal-box{animation:pop .18s ease-out}
 @keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 .calgrid .cg .evt{color:#ffa640;font-weight:600}
+.base-item .mark.off{background:var(--muted);color:#0f1117}
+.base-item.ref-off{opacity:.62}
+.base-item img.dim{filter:grayscale(.75)}

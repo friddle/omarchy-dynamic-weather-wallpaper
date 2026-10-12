@@ -484,13 +484,16 @@ def mask_proxy(url: str) -> str:
 
 
 def ref_image_paths(limit: int = 4) -> list[Path]:
-    """参考图列表(按文件名排序, 截上限): 角色立绘/风格样例, 随生图请求上传。"""
+    """随生图上传的参考图(按文件名排序, 截上限): 仅取启用状态的。"""
     d = config.ref_images_dir()
     if not d.exists():
         return []
-    return sorted((p for p in d.iterdir()
-                   if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS),
-                  key=lambda p: p.name)[:limit]
+    enabled = config.load_config().get("ref_images_enabled") or {}
+    paths = sorted((p for p in d.iterdir()
+                    if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS
+                    and enabled.get(p.name, True)),
+                   key=lambda p: p.name)
+    return paths[:limit]
 
 
 def ffmpeg_install_running() -> bool:

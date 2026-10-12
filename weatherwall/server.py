@@ -58,11 +58,13 @@ from .app import App
 from . import net
 from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
 
-# 无需令牌的端点: 设置页本身(含拆分出的静态资源)、顶栏挂件用的状态接口、城市静态表、
-# 图片预览和 /api/session-token(内核级 UID 校验, 见 peer_uid)。其余一律要求 X-Token。
+# 无需令牌的端点: 设置页本身(含拆分出的静态资源)、顶栏挂件用的状态接口(脱敏视图)、
+# 城市静态表、/api/session-token(内核级 UID 校验, 见 peer_uid)。
+# 图片端点(wallpaper/base-image/ref-image-file)需令牌: <img> 无法带 header,
+# 支持查询参数 ?t=<token>(页面/顶栏挂件构造 URL 时附带)。
+# 其余一律要求 X-Token。
 _OPEN_PATHS = {"/", "/index.html", "/style.css", "/app.js", "/i18n.js",
-               "/api/status", "/api/cities", "/api/session-token",
-               "/api/wallpaper-file", "/api/base-image-file", "/api/ref-image-file"}
+               "/api/status", "/api/cities", "/api/session-token"}
 
 # 设置页静态资源及 MIME(按扩展名)
 _WEB_STATIC = {"/style.css": "text/css", "/app.js": "application/javascript",
@@ -315,8 +317,11 @@ def make_handler(app: App) -> type:
             self.end_headers()
             self.wfile.write(data)
 
-        def _authed(self) -> bool:
+        def _authed(self, qs: dict | None = None) -> bool:
+            """令牌校验: 优先 X-Token 头; 图片等 <img> 场景接受查询参数 ?t=(等价)。"""
             tok = self.headers.get("X-Token", "")
+            if not tok and qs:
+                tok = (qs.get("t") or [""])[0]
             want = _auth_token()
             return bool(want) and hmac.compare_digest(tok, want)
 
@@ -334,7 +339,7 @@ def make_handler(app: App) -> type:
                         return self._json({"ok": False, "error": "cross-uid"}, 403)
                     return self._json({"ok": True, "token": _auth_token(),
                                        "platform": sys.platform})
-                if url.path not in _OPEN_PATHS and not self._authed():
+                if url.path not in _OPEN_PATHS and not self._authed(qs):
                     return self._json({"ok": False, "error": "unauthorized"}, 401)
                 if url.path in ("/", "/index.html"):
                     self._file(_index_html(), "text/html; charset=utf-8")
@@ -399,10 +404,14 @@ def make_handler(app: App) -> type:
                                ("image/png" if p.suffix.lower() == ".png" else "image/webp"))
                 elif url.path == "/api/ref-images":
                     d = config.ref_images_dir()
+                    enabled = config.load_config().get("ref_images_enabled") or {}
                     items = sorted((p for p in d.glob("*")
                                     if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS),
                                    key=lambda p: p.name) if d.exists() else []
-                    self._json({"ok": True, "items": [_image_entry(p) for p in items]})
+                    self._json({"ok": True,
+                                "items": [{**_image_entry(p),
+                                           "enabled": bool(enabled.get(p.name, True))}
+                                          for p in items]})
                 elif url.path == "/api/ref-image-file":
                     p = _safe_file(config.ref_images_dir(), (qs.get("name") or [""])[0])
                     if not p:
@@ -666,6 +675,19 @@ def make_handler(app: App) -> type:
                     p.unlink()
                     app.log(f"删除参考图: {name}")
                     self._json({"ok": True})
+
+                elif url.path == "/api/ref-image-toggle":
+                    name = str(body.get("name") or "")
+                    p = _safe_file(config.ref_images_dir(), name)
+                    if not p:
+                        return self._json({"ok": False, "error": "文件不存在"}, 404)
+                    enabled = bool(body.get("enabled", True))
+                    cfg = config.load_config()
+                    table = cfg.setdefault("ref_images_enabled", {})
+                    table[name] = enabled
+                    config.save_config(cfg)
+                    app.log(f"参考图{'启用' if enabled else '停用'}: {name}")
+                    self._json({"ok": True, "name": name, "enabled": enabled})
 
                 elif url.path == "/api/prompt-cfg":
                     action = str(body.get("action") or "")

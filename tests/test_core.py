@@ -835,6 +835,41 @@ class TestLocalTokenSecurity(unittest.TestCase):
         self.assertEqual(mask_proxy("http://p:1"), "http://p:1")
         self.assertEqual(mask_proxy(""), "")
 
+    def test_image_endpoints_require_token(self):
+        """同类问题加固: 图片端点免鉴权会暴露个人壁纸/基准图/参考图, 现 ?t= 或 header 皆可。"""
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from weatherwall import server as srv
+        from weatherwall.app import App
+        srv._TOKEN = "unit-test-token"
+        app = App.__new__(App)
+        app.state = {"log": []}
+        app.log = lambda msg: None
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "b.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+            httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(app))
+            port = httpd.server_address[1]
+            threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            try:
+                with mock.patch.object(config, "base_images_dir", return_value=Path(td)), \
+                     mock.patch.object(config, "ref_images_dir", return_value=Path(td)), \
+                     mock.patch.object(config, "cache_dir", return_value=Path(td)):
+                    for ep in ("base-image-file", "wallpaper-file", "ref-image-file"):
+                        url = f"http://127.0.0.1:{port}/api/{ep}?name=b.png"
+                        with self.assertRaises(urllib.error.HTTPError) as cm:
+                            urllib.request.urlopen(url, timeout=10)
+                        self.assertEqual(cm.exception.code, 401)      # 无令牌
+                        with self.assertRaises(urllib.error.HTTPError) as cm:
+                            urllib.request.urlopen(url + "&t=wrong", timeout=10)
+                        self.assertEqual(cm.exception.code, 401)      # 错令牌
+                        with urllib.request.urlopen(url + "&t=unit-test-token",
+                                                    timeout=10) as r:
+                            self.assertEqual(r.status, 200)           # ?t= 查询参数
+            finally:
+                httpd.shutdown()
+
     def test_session_token_self_uid(self):
         """集成: 临时 HTTP 服务上, 同 UID 进程取 /api/session-token 应拿到令牌。"""
         import json

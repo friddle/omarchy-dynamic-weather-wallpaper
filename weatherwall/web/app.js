@@ -52,6 +52,8 @@ async function api(path,body){
   const r=await fetch(path,opt);const j=await r.json().catch(()=>({ok:false,error:'bad response'}));
   if(j&&j.error==='unauthorized')showTokenGate();
   if(!j.ok&&j.error)throw new Error(j.error);return j;}
+/* 图片端点需令牌: <img> 无法带 header, 统一经 ?t= 附带 */
+const imgUrl=(ep,name)=>`${ep}?name=${encodeURIComponent(name)}&t=${encodeURIComponent(APITOKEN)}`;
 
 /* ---------------- tabs ---------------- */
 const TABS=['status','base','adv','widget','gallery'];
@@ -166,7 +168,7 @@ function renderBases(r){
     d.innerHTML=`${active?'<span class="mark">✓</span>':''}
       <span class="ops"><button class="op" data-act="rename" title="${t('rename')}">✏️</button>
       <button class="op" data-act="del" title="${t('del')}">🗑</button></span>
-      <img src="/api/base-image-file?name=${encodeURIComponent(it.name)}" title="${LANG==='zh'?'点击设为生效':'click to activate'}">
+      <img src="${imgUrl('/api/base-image-file', it.name)}" title="${LANG==='zh'?'点击设为生效':'click to activate'}">
       <div class="nm">${esc(it.name)}</div>`;
     d.querySelector('img').onclick=()=>selectBase(it.name);
     d.querySelector('[data-act=rename]').onclick=e=>{e.stopPropagation();renameBase(it.name);};
@@ -245,7 +247,7 @@ function renderWalls(r){
     const d=document.createElement('div');
     d.className='wall-item';
     const fname=it.name.split('/').pop();
-    d.innerHTML=`<img src="/api/wallpaper-file?name=${encodeURIComponent(it.name)}" title="${LANG==='zh'?'点击应用':'click to apply'}">
+    d.innerHTML=`<img src="${imgUrl('/api/wallpaper-file', it.name)}" title="${LANG==='zh'?'点击应用':'click to apply'}">
       <div class="nm" title="${esc(fname)}">${esc(fname)}</div>`;
     d.querySelector('img').onclick=async()=>{try{await api('/api/apply',{file:it.name});toast(t('t_apply_ok')+fname)}catch(e){toast(e.message,true)}};
     el.appendChild(d);
@@ -473,14 +475,21 @@ function renderRefs(){
   el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">'+t('t_no_ref')+'</div>';
   for(const it of r.items){
     const d=document.createElement('div');
-    d.className='base-item';
-    d.innerHTML=`<span class="ops"><button class="op" data-act="del" title="${t('del')}">🗑</button></span>
-      <img src="/api/ref-image-file?name=${encodeURIComponent(it.name)}">
+    d.className='base-item'+(it.enabled?'':' ref-off');
+    d.innerHTML=`<span class="mark ${it.enabled?'':'off'}" data-act="toggle"
+        title="${it.enabled?t('ref_enabled'):t('ref_disabled')}">${it.enabled?'✓ 已启用':'已停用'}</span>
+      <span class="ops"><button class="op" data-act="del" title="${t('del')}">🗑</button></span>
+      <img src="${imgUrl('/api/ref-image-file', it.name)}" class="${it.enabled?'':'dim'}">
       <div class="nm">${esc(it.name)}</div>`;
+    d.querySelector('[data-act=toggle]').onclick=e=>{e.stopPropagation();toggleRef(it.name, !it.enabled);};
     d.querySelector('[data-act=del]').onclick=e=>{e.stopPropagation();
       if(confirm(t('del_confirm')+' '+it.name+' ?'))delRef(it.name);};
     el.appendChild(d);
   }
+}
+async function toggleRef(name,enabled){
+  try{await api('/api/ref-image-toggle',{name,enabled});loadRefs();}
+  catch(e){toast(e.message,true)}
 }
 async function delRef(name){
   try{await api('/api/ref-image-delete',{name});toast(LANG==='zh'?'已删除':'Deleted');loadRefs();}
@@ -632,9 +641,9 @@ function wgAddField(v=''){
 function wgPreviewBg(){
   /* 预览背景优先跟随当前生效的基准图, 没有再回落最新壁纸 */
   let url=null;
-  if(BASE_CACHE&&BASE_CACHE.active)url='/api/base-image-file?name='+encodeURIComponent(BASE_CACHE.active);
+  if(BASE_CACHE&&BASE_CACHE.active)url=imgUrl('/api/base-image-file', BASE_CACHE.active);
   const g=WALL_CACHE&&WALL_CACHE.groups&&WALL_CACHE.groups[0];
-  if(!url&&g&&g.items&&g.items.length)url='/api/wallpaper-file?name='+encodeURIComponent(g.items[0].name);
+  if(!url&&g&&g.items&&g.items.length)url=imgUrl('/api/wallpaper-file', g.items[0].name);
   if(url){const bg=`url(${url})`;$('wg-preview').style.backgroundImage=bg;$('wg-preview-big').style.backgroundImage=bg;}
 }
 /* 挂件盒角上的放大按钮(委托处理, 小/大预览共用) */

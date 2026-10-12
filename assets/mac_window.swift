@@ -10,9 +10,13 @@ import WebKit
 let urlStr = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "http://127.0.0.1:8765"
 let tokenPath = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : ""
 
-// WKWebView 默认不弹文件选择面板, 必须实现 runOpenPanelWith,
-// 否则页面里的 <input type=file>/点击上传会静默无反应。
+// WKWebView 默认不弹任何 JS 面板: 必须实现 runOpenPanelWith(文件上传)、
+// alert/confirm/textInput(删除确认/重命名/新建模板名), 否则全部静默失败。
 final class PanelUIDelegate: NSObject, WKUIDelegate {
+    private func rootFor(_ webView: WKWebView) -> NSWindow? {
+        webView.window
+    }
+
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo,
                  completionHandler: @escaping ([URL]?) -> Void) {
@@ -26,6 +30,40 @@ final class PanelUIDelegate: NSObject, WKUIDelegate {
         } else {
             completionHandler(nil)
         }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        completionHandler()
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = prompt
+        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: "取消")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        input.stringValue = defaultText ?? ""
+        alert.accessoryView = input
+        let ok = alert.runModal() == .alertFirstButtonReturn
+        completionHandler(ok ? input.stringValue : nil)
     }
 }
 

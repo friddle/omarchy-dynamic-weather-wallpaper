@@ -213,6 +213,8 @@ DEFAULT_CONFIG = {
         "position": {"x": 0.09, "y": 0.5},  # 盒中心(相对图片 0~1), 默认左侧居中(天气挂件在右)
     },
     "base_image": "",             # base_images/ 下的文件名
+    # 参考图启用表: {文件名: bool}, 未列出的默认启用; 禁用的不随生图请求上传
+    "ref_images_enabled": {},
     "ui": {
         "language": "en",         # 展示语言: en(默认) / zh
     },
