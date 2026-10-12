@@ -57,12 +57,36 @@
 omarchy plugin add https://github.com/friddle/omarchy-dynamic-weather-wallpaper.git --enable
 ```
 
-装好后右键挂件一次即可安装并启动服务(也可先自行运行 `./install.sh linux`)。"切主题不换壁纸"只需装一个 hook:
+装好后右键挂件一次即可安装并启动服务(也可先自行运行 `./install.sh linux`)。"切主题不换壁纸"只需把仓库自带的 hook 拷进 theme-set 目录:
 
 ```bash
-curl -o ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper \
-  https://raw.githubusercontent.com/friddle/omarchy-dynamic-weather-wallpaper/main/keep-dynamic-wallpaper.hook
+cp ~/.config/omarchy/plugins/io.github.friddle.weatherwall/keep-dynamic-wallpaper.hook \
+   ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
 chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+```
+
+### 依赖
+
+- 顶栏挂件:`curl` 与 Omarchy shell(Quickshell)——Omarchy 自带。
+- 壁纸服务:Python 3(仅标准库)+ systemd 用户会话。
+- 全程无需 sudo/pkexec。
+
+### 卸载
+
+```bash
+# 1. 移除插件(顶栏挂件及自带文件)
+omarchy plugin remove io.github.friddle.weatherwall --yes
+
+# 2. 停止并移除壁纸服务
+systemctl --user disable --now weatherwall.service
+rm -f ~/.config/systemd/user/weatherwall.service
+systemctl --user daemon-reload
+
+# 3. 移除主题 hook(如已安装)
+rm -f ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+
+# 4. 可选:删除配置与壁纸缓存
+rm -rf ~/.config/omarchy-dynamic-wallpaper ~/.cache/omarchy-dynamic-wallpaper
 ```
 
 ## Linux / 源码运行

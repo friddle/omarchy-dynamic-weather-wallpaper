@@ -57,12 +57,36 @@ On [Omarchy](https://omarchy.org/) the repo doubles as a standard shell plugin â
 omarchy plugin add https://github.com/friddle/omarchy-dynamic-weather-wallpaper.git --enable
 ```
 
-Then right-click the widget once to install and start the service (or run `./install.sh linux` yourself first). To keep your dynamic wallpaper when switching themes, add a one-line hook:
+Then right-click the widget once to install and start the service (or run `./install.sh linux` yourself first). To keep your dynamic wallpaper when switching themes, copy the bundled hook into the theme-set hook directory:
 
 ```bash
-curl -o ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper \
-  https://raw.githubusercontent.com/friddle/omarchy-dynamic-weather-wallpaper/main/keep-dynamic-wallpaper.hook
+cp ~/.config/omarchy/plugins/io.github.friddle.weatherwall/keep-dynamic-wallpaper.hook \
+   ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
 chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+```
+
+### Dependencies
+
+- Bar widget: `curl` and the Omarchy shell (Quickshell) â€” both ship with Omarchy.
+- Wallpaper service: Python 3 (standard library only) and a systemd user session.
+- No sudo/pkexec is required anywhere.
+
+### Removal
+
+```bash
+# 1. Remove the plugin (bar widget + bundled files)
+omarchy plugin remove io.github.friddle.weatherwall --yes
+
+# 2. Stop and remove the wallpaper service
+systemctl --user disable --now weatherwall.service
+rm -f ~/.config/systemd/user/weatherwall.service
+systemctl --user daemon-reload
+
+# 3. Remove the theme hook, if installed
+rm -f ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
+
+# 4. Optional: delete config and wallpaper cache
+rm -rf ~/.config/omarchy-dynamic-wallpaper ~/.cache/omarchy-dynamic-wallpaper
 ```
 
 ## Linux / running from source
