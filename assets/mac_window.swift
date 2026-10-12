@@ -1,11 +1,14 @@
 // WeatherDynamicWallpaper 设置窗口助手: 原生 WKWebView 窗口展示设置后台页面。
-// 用法: WeatherDynamicWallpaperWindow <url>   (默认 http://127.0.0.1:8765)
+// 用法: WeatherDynamicWallpaperWindow <url> [token文件路径]
+//   第二个参数是 0600 的本机令牌文件路径(路径不敏感, 令牌本体不经 argv),
+//   助手读取后用 WKUserScript 注入 sessionStorage —— 令牌不出现在 URL/页面请求里。
 // 构建: swiftc -O -framework Cocoa -framework WebKit mac_window.swift -o WeatherDynamicWallpaperWindow
 
 import Cocoa
 import WebKit
 
 let urlStr = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "http://127.0.0.1:8765"
+let tokenPath = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : ""
 
 // WKWebView 默认不弹文件选择面板, 必须实现 runOpenPanelWith,
 // 否则页面里的 <input type=file>/点击上传会静默无反应。
@@ -42,6 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 920, height: 700)
 
         let config = WKWebViewConfiguration()
+        // 注入本机令牌: 只有同用户的助手读得到 token 文件; 在任何页面脚本之前注入
+        if !tokenPath.isEmpty, let raw = try? String(contentsOfFile: tokenPath, encoding: .utf8) {
+            let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "'", with: "\\'")
+            let script = WKUserScript(
+                source: "try{sessionStorage.setItem('ww_token','\(token)')}catch(_){}",
+                injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            config.userContentController.addUserScript(script)
+        }
         webView = WKWebView(frame: window.contentView!.bounds, configuration: config)
         webView.autoresizingMask = [.width, .height]
         webView.uiDelegate = uiDelegate

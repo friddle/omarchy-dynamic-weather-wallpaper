@@ -14,8 +14,8 @@ python3 -m weatherwall init
 CONFIG_URL="http://127.0.0.1:8765"
 TOKEN_FILE="$HOME/.config/omarchy-dynamic-wallpaper/token"
 [ "$(uname)" = "Darwin" ] && TOKEN_FILE="$HOME/Library/Application Support/omarchy-dynamic-wallpaper/token"
-# 令牌经 URL fragment(#t=) 带入, 不会发给服务器; token 文件仅本用户可读
-CONFIG_TOKEN_URL="$CONFIG_URL/#t=$(cat "$TOKEN_FILE" 2>/dev/null || true)"
+# 打开裸 URL 即可: 页面经 /api/session-token(内核 UID 校验)自动获取令牌,
+# 令牌不出现在任何命令行参数里; 手动打开才需要令牌门输入一次
 
 # 等设置后台就绪(最多 ~15s)，就绪后在默认浏览器弹出配置页
 open_config_page() {
@@ -31,13 +31,13 @@ sys.exit(1)
 PY
   then
     if [ "$(uname)" = "Darwin" ]; then
-      open "$CONFIG_TOKEN_URL" >/dev/null 2>&1 || true
+      open "$CONFIG_URL" >/dev/null 2>&1 || true
     else
-      xdg-open "$CONFIG_TOKEN_URL" >/dev/null 2>&1 || true
+      xdg-open "$CONFIG_URL" >/dev/null 2>&1 || true
     fi
     echo "已在浏览器打开配置页: $CONFIG_URL"
   else
-    echo "配置页地址: $CONFIG_URL (服务暂未就绪，稍后手动打开; 打开后需输入一次本机令牌: $TOKEN_FILE)"
+    echo "配置页地址: $CONFIG_URL (服务暂未就绪，稍后手动打开)"
   fi
 }
 

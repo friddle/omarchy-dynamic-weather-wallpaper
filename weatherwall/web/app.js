@@ -15,7 +15,9 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
   grab();
   window.addEventListener('hashchange',grab);   /* 已打开的页面再收到 #t= 也能登录 */
 })();
-const APITOKEN=sessionStorage.getItem('ww_token')||'';
+/* Windows 启动器经 fragment 带入(其上无跨用户读 argv 的通道);
+   Linux/mac 由 init 阶段经 /api/session-token(内核 UID 校验)自动获取。 */
+let APITOKEN=sessionStorage.getItem('ww_token')||'';
 function showTokenGate(){
   const m=$('modal-token');if(!m||!m.classList.contains('hidden'))return;
   m.classList.remove('hidden');
@@ -766,6 +768,15 @@ window.addEventListener('resize',syncBigIfOpen);
 
 /* ---------------- init ---------------- */
 (async function init(){
+  /* 令牌自举: 无 fragment 时(Linux/mac)向本机服务换取 —— 服务端以内核凭据
+     (SO_PEERCRED/getpeereid)校验对端 UID, 仅本用户进程可取, 其他账户 403 */
+  if(!APITOKEN){
+    try{
+      const r=await fetch('/api/session-token').then(x=>x.json());
+      if(r&&r.ok&&r.token){sessionStorage.setItem('ww_token',r.token);APITOKEN=r.token;}
+    }catch(_){/* 服务未起或平台不支持: 落到令牌门 */}
+  }
+  if(!APITOKEN)showTokenGate();
   try{
     const [cfg,cities]=await Promise.all([api('/api/config'),api('/api/cities')]);
     CHINA=cities.china;US=cities.us;
@@ -773,7 +784,6 @@ window.addEventListener('resize',syncBigIfOpen);
     fillForm(cfg.config);
     renderStatus(ST_CACHE);
   }catch(e){toast(e.message,true)}
-  if(!APITOKEN)showTokenGate();
   loadStatus();loadBases();loadWalls();loadRefs();loadCalendarEvents();
   loadGenModels();
   wgRender();wgPlace();calRender();calPlace();

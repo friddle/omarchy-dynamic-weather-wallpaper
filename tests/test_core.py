@@ -765,20 +765,57 @@ class TestLocalTokenSecurity(unittest.TestCase):
         self.assertNotIn(b"unit-test-token", html)    # 令牌本体绝不在页面里
         self.assertIn(b"app.js", html)                # 页面壳仍完整
 
-    def test_settings_url_uses_fragment(self):
+    def test_launchers_carry_no_token(self):
+        """启动器源码审计: 令牌本体不得出现在任何 argv 拼接里(Windows 也如此)。"""
+        import inspect
+        import weatherwall.gui as gui
+        import weatherwall.server as srv
+        # gui: 只把 token 文件"路径"交给窗口助手
+        src = inspect.getsource(gui.open_url)
+        self.assertIn("token_path", src)
+        self.assertNotIn("#t=", src)
+        for f in ("WeatherWidget.qml",):
+            text = (Path(__file__).resolve().parent.parent / f).read_text(encoding="utf-8")
+            self.assertNotIn("#t=", text)
+        # session-token 端点存在且免 X-Token(内核 UID 校验兜底)
+        self.assertIn("/api/session-token", srv._OPEN_PATHS)
+
+    def test_session_token_self_uid(self):
+        """集成: 临时 HTTP 服务上, 同 UID 进程取 /api/session-token 应拿到令牌。"""
+        import json
+        import threading
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from weatherwall import server as srv
+        from weatherwall.app import App
+        srv._TOKEN = "unit-test-token"
+        app = App.__new__(App)
+        app.state = {"log": []}
+        app.log = lambda msg: None
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.make_handler(app))
+        port = httpd.server_address[1]
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/session-token", timeout=15) as r:
+                data = json.loads(r.read())
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["token"], "unit-test-token")
+        finally:
+            httpd.shutdown()
+
+    def test_session_token_in_open_paths(self):
         from weatherwall import server
-        url = server.settings_url(8765)
-        self.assertIn("#t=unit-test-token", url)      # 令牌走 fragment
-        self.assertTrue(url.startswith("http://127.0.0.1:8765/#t="))
+        self.assertIn("/api/session-token", server._OPEN_PATHS)
 
     def test_status_log_never_contains_token(self):
-        # serve() 的令牌地址走 print(), app.log(/api/status 可见)只打无令牌 URL
+        # serve() 只打印裸 URL 与令牌文件"路径"(路径不敏感), app.log 无令牌本体
         import inspect
         from weatherwall import server
         src = inspect.getsource(server.serve)
-        self.assertIn("settings_url", src)            # 打印用带令牌地址
-        log_line = next(l for l in src.splitlines() if "app.log" in l)
-        self.assertNotIn("_auth_token", log_line)
+        self.assertIn("_auth_token_path", src)
+        log_line = next(l for l in src.splitlines() if "app.log" in l or "app.log" in src)
+        self.assertNotIn("_auth_token()", src.replace("_auth_token_path", ""))
 
 
 class TestSchedulerHelpers(unittest.TestCase):

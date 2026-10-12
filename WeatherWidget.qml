@@ -98,9 +98,9 @@ Panel {
   }
 
   function openControlPanel() {
-    // 令牌经 URL fragment 带入(不发给服务器/不进日志); token 文件仅本用户可读
-    Quickshell.execDetached(["bash", "-c",
-      'xdg-open "http://127.0.0.1:8765/#t=$(cat "$HOME/.config/omarchy-dynamic-wallpaper/token" 2>/dev/null)"'])
+    // 裸 URL: 页面自行经 /api/session-token(内核 UID 校验)获取令牌,
+    // 令牌不出现在任何命令行参数(/proc/<pid>/cmdline)里
+    Quickshell.execDetached(["xdg-open", root.serverUrl])
   }
 
   function serviceAction() {

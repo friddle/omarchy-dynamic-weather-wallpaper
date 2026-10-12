@@ -1,11 +1,14 @@
 """本地设置后台：HTTP API + 静态设置页，仅绑定 127.0.0.1。
 
-鉴权模型(防同机其他账户跨账户访问):
-  - 页面与只读状态接口开放, 但页面是纯静态壳, 不含任何令牌;
+鉴权模型(防同机其他账户跨账户访问, 令牌零暴露):
+  - 页面是纯静态壳, 无鉴权返回也不含任何令牌;
   - 变更类接口要求 X-Token 请求头, 令牌仅存 0600 的 token 文件(属主可读);
-  - 令牌通过启动器 URL fragment(#t=...) 进入页面, fragment 不随请求发往服务器,
-    也不写入任何日志(/api/status 可见的 app.log 中不含令牌);
-  - 手动打开页面时显示令牌门, 需从属主终端的启动输出或 token 文件获取。
+  - 令牌进入页面的通道全部不经 argv/URL/日志:
+      Linux:   页面自取 /api/session-token, 服务端按 /proc/net/tcp inode 归属判定对端 UID;
+      macOS:   GUI 助手读 token 文件, WKUserScript 注入(备用: lsof 判定 UID 的同端点);
+      Windows: pywebview 加载完成后 evaluate_js 注入;
+    手动打开(浏览器直开)时显示令牌门, 需从属主终端输出或 token 文件输入一次;
+  - 其他本地账户: /api/session-token 403(cross-uid), 无 X-Token 一律 401。
 
 API:
   GET  /                      设置页
@@ -41,6 +44,8 @@ import json
 import os
 import re
 import secrets
+import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -53,11 +58,10 @@ from .app import App
 from . import net
 from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
 
-# 无需令牌的端点: 设置页本身(含拆分出的静态资源)、顶栏挂件用的状态接口、城市静态表和图片预览。
-# 其余(含 API 明文的 /api/config、各种变更操作)一律要求 X-Token 请求头,
-# 防止同机其他账户未授权读取密钥或改动配置。
+# 无需令牌的端点: 设置页本身(含拆分出的静态资源)、顶栏挂件用的状态接口、城市静态表、
+# 图片预览和 /api/session-token(内核级 UID 校验, 见 peer_uid)。其余一律要求 X-Token。
 _OPEN_PATHS = {"/", "/index.html", "/style.css", "/app.js", "/i18n.js",
-               "/api/status", "/api/cities",
+               "/api/status", "/api/cities", "/api/session-token",
                "/api/wallpaper-file", "/api/base-image-file", "/api/ref-image-file"}
 
 # 设置页静态资源及 MIME(按扩展名)
@@ -68,8 +72,95 @@ _TOKEN = ""
 _FFMPEG_INSTALL = {"running": False, "error": None}   # 后台安装 ffmpeg 的状态
 
 
+def peer_uid(sock) -> int | None:
+    """TCP 连接对端的属主 UID(仅 Linux/macOS 有意义)。
+
+    - Linux: /proc/net/tcp(6) 按 4 元组找对端套接字 inode, 再扫 /proc/*/fd 属主 ——
+      内核数据, 其他用户伪造不了;
+    - macOS: 无 /proc, 用系统自带 lsof 反查 PID 后取属主;
+    - Windows/查询失败: None(由 GUI 原生注入令牌或令牌门兜底)。
+    """
+    if sys.platform.startswith("linux"):
+        return _tcp_peer_uid_linux(sock)
+    if sys.platform == "darwin":
+        return _tcp_peer_uid_macos(sock)
+    return None
+
+
+def _hexaddr(ip: str, port: int) -> str:
+    """/proc/net/tcp 地址编码: 4 段小端 hex:port。"""
+    import ipaddress
+    packed = ipaddress.ip_address(ip).packed
+    if len(packed) == 4:
+        return "%08X:%04X" % (struct.unpack("<I", packed)[0], port)
+    return "".join("%02X" % b for b in packed) + ":%04X" % port
+
+
+def _tcp_peer_uid_linux(sock) -> int | None:
+    import glob as _glob
+    try:
+        lip, lport = sock.getsockname()[:2]
+        rip, rport = sock.getpeername()[:2]
+    except OSError:
+        return None
+    want_local, want_rem = _hexaddr(rip, rport), _hexaddr(lip, lport)  # 对端视角
+    inode = None
+    for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            for line in Path(path).read_text(encoding="utf-8").splitlines()[1:]:
+                parts = line.split()
+                if len(parts) < 10 or parts[3] != "01":   # 01 = ESTABLISHED
+                    continue
+                if parts[1] == want_local and parts[2] == want_rem:
+                    inode = parts[9]
+                    break
+        except OSError:
+            continue
+        if inode:
+            break
+    if not inode:
+        return None
+    target = f"socket:[{inode}]"
+    for fd in _glob.glob("/proc/[0-9]*/fd/*"):
+        try:
+            if os.readlink(fd) == target:
+                return os.stat(fd).st_uid
+        except OSError:
+            continue
+    return None
+
+
+def _tcp_peer_uid_macos(sock) -> int | None:
+    import subprocess
+    try:
+        rport = sock.getpeername()[1]
+    except OSError:
+        return None
+    try:
+        out = subprocess.run(["/usr/sbin/lsof", "-nP", f"-iTCP:{rport}",
+                              "-sTCP:ESTABLISHED", "-Fp"],
+                             capture_output=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    pids = [int(l[1:]) for l in out.stdout.decode("utf-8", "replace").splitlines()
+            if l.startswith("p") and l[1:].isdigit()]
+    me = os.getpid()
+    for pid in pids:                     # 跳过服务器自身, 优先真实对端进程
+        if pid == me:
+            continue
+        try:
+            out = subprocess.run(["ps", "-o", "uid=", "-p", str(pid)],
+                                 capture_output=True, timeout=5)
+            return int(out.stdout.decode().strip())
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            continue
+    # 只看到服务器自己的连接(对端与服务器同进程, 如本进程自测): 视为同 UID
+    return os.getuid() if pids else None
+
+
 def _auth_token() -> str:
-    """本地访问令牌: 首次启动生成, 0600 保存; 设置页由服务端注入, 无需手工配置。"""
+    """本地访问令牌: 首次启动生成, 0600 保存; 页面经 /api/session-token(UID 校验)、
+    启动器原生注入(WKUserScript/evaluate_js)或令牌门获取, 绝不进 argv/页面。"""
     global _TOKEN
     if _TOKEN:
         return _TOKEN
@@ -92,20 +183,19 @@ def _auth_token() -> str:
     return _TOKEN
 
 
+def _auth_token_path() -> Path:
+    """令牌文件路径(0600)。路径本身不敏感, 可交给同用户的窗口助手读取。"""
+    _auth_token()
+    return config.config_dir() / "token"
+
+
 def _index_html() -> bytes:
     """设置页(纯静态壳, 不含任何令牌 —— 无鉴权返回它也不再泄露凭据)。
 
-    令牌由启动器经 URL fragment(#t=) 带入页面, JS 存 sessionStorage 后随 X-Token 头使用;
-    fragment 不会出现在任何 HTTP 请求/服务端日志里。手动打开需在令牌门里输入一次。
+    令牌由平台通道进入页面: Linux 页面自取 /api/session-token(UID 校验);
+    macOS/Windows 由 GUI 原生注入; 手动打开需在令牌门输入一次。
     """
     return web_index_path().read_bytes()
-
-
-def settings_url(port: int | None = None, host: str = "127.0.0.1") -> str:
-    """带令牌 fragment 的设置页地址(仅供本用户进程/终端使用, 勿写入 app.log)。"""
-    if port is None:
-        port = config.load_config()["server"]["port"]
-    return f"http://{host}:{port}/#t={_auth_token()}"
 
 
 def web_index_path() -> Path:
@@ -236,6 +326,14 @@ def make_handler(app: App) -> type:
             url = urlparse(self.path)
             qs = parse_qs(url.query)
             try:
+                # 令牌自助获取: 内核判定对端 UID, 仅本用户进程(浏览器)可取 ——
+                # 令牌因此不出现在任何 argv/文件/页面里, 其他账户 403
+                if url.path == "/api/session-token":
+                    uid = peer_uid(self.connection)
+                    if uid is None or uid != os.getuid():
+                        return self._json({"ok": False, "error": "cross-uid"}, 403)
+                    return self._json({"ok": True, "token": _auth_token(),
+                                       "platform": sys.platform})
                 if url.path not in _OPEN_PATHS and not self._authed():
                     return self._json({"ok": False, "error": "unauthorized"}, 401)
                 if url.path in ("/", "/index.html"):
@@ -685,8 +783,9 @@ def make_handler(app: App) -> type:
 def serve(app: App, host: str, port: int) -> None:
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     app.log(f"设置后台已启动: http://{host}:{port}")
-    # 令牌地址只打到属主终端, 绝不进 app.log(/api/status 对外可见会泄露令牌)
-    print(f"设置页(本机令牌已附): {settings_url(port, host if host != '0.0.0.0' else '127.0.0.1')}", flush=True)
+    # 打到属主终端(不进 app.log); 手动浏览器直开时可在令牌门粘贴
+    print(f"设置页: http://{host if host != '0.0.0.0' else '127.0.0.1'}:{port}  "
+          f"(本机令牌: {_auth_token_path()})", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

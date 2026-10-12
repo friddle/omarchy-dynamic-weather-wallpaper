@@ -10,6 +10,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -79,8 +80,13 @@ def cmd_gui(app: App, args) -> int:
     cfg = config.load_config()
     host = args.host or cfg["server"]["host"]
     port = args.port or cfg["server"]["port"]
-    # URL fragment 携带本机令牌(#t=), 不会出现在任何请求/日志里
-    url = f"http://127.0.0.1:{port}/#t={server._auth_token()}"
+    # 全平台一律裸 URL: 令牌本体绝不进 argv/页面。
+    # 令牌交给窗口通道注入 —— 文件"路径"不敏感, 可安全进 argv:
+    #   macOS: Swift 助手读 token 文件, WKUserScript 注入;
+    #   Windows: pywebview 加载完成后 evaluate_js 注入;
+    #   Linux: 浏览器打开裸 URL, 页面经 /api/session-token(内核 UID 校验)自动获取。
+    url = f"http://127.0.0.1:{port}"
+    token_path = str(server._auth_token_path())
 
     def _port_open() -> bool:
         with socket.socket() as s:
@@ -90,7 +96,7 @@ def cmd_gui(app: App, args) -> int:
     if _port_open():
         # 已有实例在提供服务: 直接弹窗连接, 不重复起服务
         print(f"已有实例运行于 {url}，直接打开设置窗口")
-        gui.open_url(url)
+        gui.open_url(url, token_path)
         return 0
 
     def _serve():
@@ -105,7 +111,7 @@ def cmd_gui(app: App, args) -> int:
         if _port_open():
             break
         time.sleep(0.2)
-    gui.open_url(url)
+    gui.open_url(url, token_path)
     return 0
 
 

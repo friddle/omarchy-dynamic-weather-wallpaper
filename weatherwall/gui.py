@@ -45,27 +45,45 @@ def _error_dialog(msg: str) -> None:
         pass
 
 
-def open_url(url: str) -> None:
-    """打开设置窗口，阻塞至窗口关闭(失败则提示并驻留进程)。"""
+def open_url(url: str, token_path: str = "") -> None:
+    """打开设置窗口，阻塞至窗口关闭(失败则提示并驻留进程)。
+
+    token_path: 0600 令牌文件的"路径"(令牌本体不经 argv/URL):
+      macOS 原生助手读取后经 WKUserScript 注入; Windows pywebview 加载后 evaluate_js 注入。
+    """
     # 1) macOS 原生 Swift 助手
     if sys.platform == "darwin":
         helper = _mac_helper_path()
         if helper:
             try:
-                subprocess.run([helper, url], check=False)
+                subprocess.run([helper, url, token_path], check=False)
                 return  # 窗口关闭 = 返回(服务由主进程维持)
             except OSError as e:
                 _error_dialog(f"窗口助手启动失败: {e}\\n服务仍在后台运行: {url}")
 
     # 2) pywebview (Windows exe 内嵌)
     try:
+        import json as _json
+
         import webview
 
-        webview.create_window(
+        window = webview.create_window(
             WINDOW_TITLE, url,
             width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=(920, 700),
             background_color="#0f1117",
         )
+
+        def _inject_token():
+            if token_path:
+                try:
+                    token = Path(token_path).read_text(encoding="utf-8").strip()
+                    window.evaluate_js(
+                        "try{sessionStorage.setItem('ww_token',"
+                        + _json.dumps(token) + ")}catch(_){}")
+                except OSError:
+                    pass
+
+        window.events.loaded += _inject_token
         webview.start()
         return
     except ImportError:
@@ -83,7 +101,8 @@ def open_url(url: str) -> None:
     _park()
 
 
-def open_url_async(url: str) -> threading.Thread:
-    t = threading.Thread(target=open_url, args=(url,), daemon=True, name="weatherwall-gui")
+def open_url_async(url: str, token_path: str = "") -> threading.Thread:
+    t = threading.Thread(target=open_url, args=(url, token_path), daemon=True,
+                         name="weatherwall-gui")
     t.start()
     return t
