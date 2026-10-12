@@ -309,7 +309,7 @@ def _drawtext(row: dict, run: dict, font: str, tf: str, minimal: bool) -> str:
     parts = [f"drawtext=fontfile={_fesc(use)}",
              f"textfile={_fesc(tf)}",
              f"fontsize={row['fontsize']}",
-             "fontcolor=white@0.96",
+             f"fontcolor={run.get('color', 'white@0.96')}",
              f"x={run['x']}", f"y={row['y']}",
              "expansion=none"]
     if minimal:
@@ -418,4 +418,156 @@ def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
         out = tdir / "out.jpg"
         if r.returncode != 0 or not out.exists():
             raise WidgetError(f"ffmpeg 合成失败: {r.stderr.decode('utf-8', 'replace')[:200]}")
+        return out.read_bytes(), "jpg"
+
+
+# ---------- 日历挂件 ----------
+
+HEART = "\u2665"  # 今日标记: 红心(需字体覆盖, 无则仅红字标注)
+
+CAL_WEEKDAYS = {
+    "en": ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"),
+    "zh": ("一", "二", "三", "四", "五", "六", "日"),
+}
+
+
+def calendar_cells(now: datetime.datetime, lang: str = "en") -> dict:
+    """月历数据(周一起始): 标题/表头/各周日期(0 为空位)。纯计算便于测试。"""
+    import calendar as _cal
+    weeks = _cal.Calendar(firstweekday=0).monthdayscalendar(now.year, now.month)
+    is_zh = lang == "zh"
+    title = f"{now.year}年{now.month}月" if is_zh else now.strftime("%B %Y")
+    return {
+        "title": title,
+        "header": CAL_WEEKDAYS["zh"] if is_zh else CAL_WEEKDAYS["en"],
+        "weeks": weeks,
+        "lang": "zh" if is_zh else "en",
+    }
+
+
+def calendar_layout(img_w: int, img_h: int, ccfg: dict,
+                    now: datetime.datetime, lang: str = "en") -> dict:
+    """日历挂件盒与每个文本单元的 px 坐标。今日单元用红色, 其余白色。"""
+    cal = calendar_cells(now, lang)
+    scale = max(0.1, min(3.0, float(ccfg.get("scale") or 0.5)))
+    base = max(14, round(img_w / 34 * scale))
+    pad = round(base * 0.9)
+    gap = round(base * 0.3)
+    title_sz = round(base * 1.15)
+    head_sz = round(base * 0.72)
+    day_sz = base
+
+    cw = _text_width("28", day_sz) + gap          # 列宽按两位数估
+    rh = round(day_sz * 1.3)
+    grid_w = cw * 7
+    title_h = round(title_sz * 1.25)
+    head_h = round(head_sz * 1.35)
+    box_w = min(img_w - 8, grid_w + pad * 2)
+    box_h = min(img_h - 8, title_h + head_h + rh * len(cal["weeks"]) + pad * 2 + gap)
+
+    style = str(ccfg.get("style") or "glass").lower()
+    if style == "banner":
+        bx, by = 0, img_h - box_h
+    else:
+        # 与信息挂件一致: position 为挂件盒中心点(相对图片 0~1), 默认左侧垂直居中
+        pos = ccfg.get("position") or {}
+        try:
+            fx = min(1.0, max(0.0, float(pos.get("x", 0.09))))
+            fy = min(1.0, max(0.0, float(pos.get("y", 0.5))))
+        except (TypeError, ValueError):
+            fx, fy = 0.09, 0.5
+        bx = min(img_w - box_w, max(0, round(fx * img_w) - box_w // 2))
+        by = min(img_h - box_h, max(0, round(fy * img_h) - box_h // 2))
+
+    def cell(col: int, y: float, text: str, sz: int, color: str) -> dict:
+        return {"text": text, "x": bx + pad + col * cw, "y": round(y),
+                "fontsize": sz, "color": color,
+                "w": _text_width(text, sz), "center": True}
+
+    cells = []
+    y = float(by + pad)
+    cells.append({**cell(0, y, cal["title"], title_sz, "white@0.97"), "center": False})
+    y += title_h + gap
+    for i, name in enumerate(cal["header"]):      # 周末列表头稍暗
+        cells.append(cell(i, y, name, head_sz, "white@0.55" if i >= 5 else "white@0.75"))
+    y += head_h + gap
+    for week in cal["weeks"]:
+        for i, d in enumerate(week):
+            if d:
+                cells.append(cell(i, y, str(d), day_sz,
+                                  "0xff4d5e@0.98" if d == now.day else "white@0.96"))
+        y += rh
+    return {"box": [bx, by, box_w, box_h], "pad": pad, "cells": cells,
+            "day_sz": day_sz, "gap": gap}
+
+
+def _cal_ffargs(lay: dict, ccfg: dict, font: str, tdir: Path, img_w: int) -> list[str]:
+    style = str(ccfg.get("style") or "glass").lower()
+    try:
+        op = min(0.95, max(0.0, float(ccfg.get("bg_opacity", 0.55))))
+    except (TypeError, ValueError):
+        op = 0.55
+    bx, by, bw, bh = lay["box"]
+    texts = []
+    for i, c in enumerate(lay["cells"]):
+        tf = tdir / f"cal{i}.txt"
+        tf.write_text(c["text"], encoding="utf-8")
+        texts.append((c, tf))
+    minimal = style == "minimal"
+    dt = ",".join(_drawtext(c, c, font, tf, minimal) for c, tf in texts)
+    if minimal:  # 无背景, 仅阴影文字
+        return ["-vf", dt]
+    if style == "banner":  # 底部整幅横幅
+        box = f"drawbox=x=0:y={by}:w={img_w}:h={bh}:color=black@{op}:t=fill"
+        return ["-vf", f"{box},{dt}"]
+    border = f"drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=white@0.22:t=3"
+    if style == "glass":
+        blur_r = max(4, lay["pad"] // 2)
+        fc = (f"[0:v]split=2[bg][fg];"
+              f"[bg]crop={bw}:{bh}:{bx}:{by},boxblur={blur_r}[bl];"
+              f"[fg][bl]overlay={bx}:{by}[comp];"
+              f"[comp]drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=black@{round(op * 0.45, 2)}:t=fill,"
+              f"{border},{dt}[vout]")
+        return ["-filter_complex", fc, "-map", "[vout]"]
+    box = f"drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=black@{op}:t=fill"
+    return ["-vf", f"{box},{border},{dt}"]
+
+
+def compose_calendar(data: bytes, ccfg: dict, now: datetime.datetime,
+                     lang: str = "en") -> tuple[bytes, str]:
+    """日历挂件主入口: 壁纸 bytes -> 合成月历后的 (jpeg bytes, "jpg")。今日红心标注。"""
+    if not shutil.which("ffmpeg"):
+        raise WidgetError("未找到 ffmpeg, 无法合成日历")
+    font = find_font()
+    if font is None:
+        raise WidgetError("未找到可用字体文件")
+    img_w, img_h = _probe_size(data)
+    lay = calendar_layout(img_w, img_h, ccfg, now, lang)
+
+    # 今日红心: 找得到覆盖 ♥ 的字体才画, 并把红字换行加宽单元; 否则仅红字
+    heart_font = find_icon_font({HEART}) or (font if font_covers(font, HEART) else None)
+    if heart_font:
+        today = next((c for c in lay["cells"]
+                      if c["color"].startswith("0xff4d5e") and c["text"] == str(now.day)), None)
+        if today:
+            hx = today["x"] + today["w"] + max(2, lay["gap"] // 3)
+            if hx + lay["day_sz"] < lay["box"][0] + lay["box"][2] - lay["pad"]:
+                lay["cells"].append({"text": HEART, "x": hx,
+                                     "y": today["y"] + round(lay["day_sz"] * 0.12),
+                                     "fontsize": round(lay["day_sz"] * 0.78),
+                                     "color": "0xff4d5e@0.98", "w": 0,
+                                     "font": heart_font})
+
+    with tempfile.TemporaryDirectory(prefix="weatherwall-cal-") as td:
+        tdir = Path(td)
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+               "-i", "-", *(_cal_ffargs(lay, ccfg, font, tdir, img_w)),
+               "-frames:v", "1", "-q:v", "2", str(tdir / "out.jpg")]
+        try:
+            r = subprocess.run(cmd, input=data, capture_output=True, timeout=120)
+        except subprocess.TimeoutExpired as e:
+            raise WidgetError("ffmpeg 日历合成超时") from e
+        out = tdir / "out.jpg"
+        if r.returncode != 0 or not out.exists():
+            raise WidgetError(f"ffmpeg 日历合成失败: {r.stderr.decode('utf-8', 'replace')[:200]}")
         return out.read_bytes(), "jpg"

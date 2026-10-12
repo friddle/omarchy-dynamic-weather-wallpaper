@@ -4,6 +4,7 @@
 """
 
 import datetime as dt
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -418,6 +419,88 @@ class TestWidget(unittest.TestCase):
         if font is None:
             self.skipTest("系统无覆盖天气符号的图标字体")
         self.assertTrue(widget.font_covers(font, "☀⛅"))
+
+
+class TestCalendarWidget(unittest.TestCase):
+    def test_calendar_cells(self):
+        import datetime as dt
+        from weatherwall import widget
+        now = dt.datetime(2026, 10, 12, 9, 30)
+        zh = widget.calendar_cells(now, "zh")
+        self.assertEqual(zh["title"], "2026年10月")
+        self.assertEqual(zh["header"][0], "一")  # 周一起始
+        en = widget.calendar_cells(now, "en")
+        self.assertEqual(en["title"], "October 2026")
+        self.assertEqual(en["header"][0], "Mo")
+        # 每周 7 天、日期 1..31 全部出现且顺序递增
+        flat = [d for w in zh["weeks"] for d in w if d]
+        self.assertEqual(flat, list(range(1, 32)))
+
+    def test_calendar_layout_box_and_today(self):
+        import datetime as dt
+        from weatherwall import widget
+        now = dt.datetime(2026, 10, 12, 9, 30)
+        ccfg = {"scale": 0.5, "position": {"x": 0.09, "y": 0.5}, "style": "glass"}
+        lay = widget.calendar_layout(3840, 2160, ccfg, now, "zh")
+        bx, by, bw, bh = lay["box"]
+        self.assertGreaterEqual(bx, 0)
+        self.assertGreaterEqual(by, 0)
+        self.assertLessEqual(bx + bw, 3840)
+        self.assertLessEqual(by + bh, 2160)
+        # 每个单元都在盒内
+        for c in lay["cells"]:
+            self.assertGreaterEqual(c["x"], bx)
+            self.assertLessEqual(c["x"], bx + bw)
+            self.assertGreaterEqual(c["y"], by)
+            self.assertLessEqual(c["y"], by + bh)
+        # 今日单元红色
+        today = [c for c in lay["cells"] if c["text"] == "12"]
+        self.assertTrue(any(c["color"].startswith("0xff4d5e") for c in today))
+        # banner 紧贴底部
+        ban = widget.calendar_layout(3840, 2160, {"style": "banner"}, now, "en")
+        self.assertEqual(ban["box"][1] + ban["box"][3], 2160)
+        # 位置越界钳制
+        wild = widget.calendar_layout(3840, 2160, {"position": {"x": 5, "y": -3}}, now, "en")
+        self.assertLessEqual(wild["box"][0] + wild["box"][2], 3840)
+        self.assertGreaterEqual(wild["box"][1], 0)
+
+    def test_cal_ffargs_styles(self):
+        import datetime as dt
+        from weatherwall import widget
+        now = dt.datetime(2026, 10, 12, 9, 30)
+        for style in ("glass", "card", "minimal", "banner"):
+            ccfg = {"style": style, "bg_opacity": 0.55, "scale": 0.5,
+                    "position": {"x": 0.09, "y": 0.5}}
+            lay = widget.calendar_layout(800, 500, ccfg, now, "en")
+            with tempfile.TemporaryDirectory() as td:
+                args = widget._cal_ffargs(lay, ccfg, "/f.ttf", Path(td), 800)
+            joined = " ".join(args)
+            self.assertIn("drawtext", joined, style)
+            if style == "glass":
+                self.assertIn("boxblur", joined)
+            if style == "minimal":
+                self.assertNotIn("drawbox", joined)
+
+    def test_compose_calendar_smoke(self):
+        import datetime as dt
+        import shutil as sh
+        from weatherwall import widget
+        if not (sh.which("ffmpeg") and widget.find_font()):
+            self.skipTest("本机无 ffmpeg/字体, 跳过日历合成冒烟")
+        # 1x1 起步的纯色 JPEG 由 ffmpeg 现做, 避免测试夹带二进制
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "in.jpg"
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                            "-f", "lavfi", "-i", "color=c=steelblue:s=1280x720",
+                            "-frames:v", "1", str(src)], check=True)
+            now = dt.datetime(2026, 10, 12, 9, 30)
+            out, ext = widget.compose_calendar(
+                src.read_bytes(), {"scale": 0.5, "style": "glass",
+                                   "bg_opacity": 0.55,
+                                   "position": {"x": 0.12, "y": 0.5}},
+                now, "zh")
+            self.assertEqual(ext, "jpg")
+            self.assertGreater(widget._probe_size(out)[0], 0)
 
 
 class TestDaypart(unittest.TestCase):

@@ -200,6 +200,16 @@ class App:
                         self.log(f"挂件已合成 (样式: {wcfg.get('style') or 'glass'})")
                     except Exception as e:  # noqa: BLE001 - 保留已适配的图
                         self.log(f"挂件合成失败: {e}")
+                ccfg = cfg.get("widget_calendar") or {}
+                if ccfg.get("enabled"):
+                    src = data if data is not None else target.read_bytes()
+                    try:
+                        data, _ = infowidget.compose_calendar(
+                            src, ccfg, now,
+                            lang=str((cfg.get("ui") or {}).get("language") or "en"))
+                        self.log("日历挂件已合成")
+                    except Exception as e:  # noqa: BLE001 - 保留已合成的图
+                        self.log(f"日历挂件合成失败: {e}")
                 if data is not None:
                     out = config.applied_dir() / f"{target.stem}.jpg"
                     out.parent.mkdir(parents=True, exist_ok=True)

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.friddle.weatherwall",
   "name": "Dynamic Weather Wallpaper",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "friddle",
   "license": "MIT",
   "description": "AI-generated time & weather aware live wallpapers. Bar widget shows live weather from the weatherwall service; left-click opens the control panel, right-click starts/restarts the service.",

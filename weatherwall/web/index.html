@@ -18,8 +18,8 @@ body{margin:0;background:linear-gradient(160deg,var(--bg),#131722 60%,#10131c);
 h1{font-size:21px;margin:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
 .sub{color:var(--muted);margin:4px 0 0;font-size:13px}
-.lang-switch{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
-.lang-switch button{background:transparent;border:0;color:var(--muted);padding:4px 14px;font:inherit;cursor:pointer}
+.lang-switch{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lang-switch button{background:transparent;border:0;color:var(--muted);padding:2px 8px;font-size:11px;line-height:1.4;cursor:pointer}
 .lang-switch button.on{background:var(--accent);color:#fff}
 /* Tabs */
 .tabs{display:flex;gap:6px;margin:20px 0 16px;background:var(--panel);border:1px solid var(--line);
@@ -107,6 +107,11 @@ textarea{resize:vertical;min-height:96px}
 .wg-drag.wgstyle-minimal{background:transparent;border:0;backdrop-filter:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .wg-drag.wgstyle-banner{left:0!important;top:auto!important;bottom:0;max-width:100%;width:100%;
   border-radius:0;border:0;border-top:1px solid rgba(255,255,255,.25);cursor:default;transform:none}
+.wg-drag.calgrid{white-space:normal;max-width:88%}
+.calgrid .cg{display:grid;grid-template-columns:repeat(7,1.7em);text-align:center;margin-top:.3em}
+.calgrid .cg .hd{color:rgba(255,255,255,.75);font-size:.82em}
+.calgrid .cg .we{color:rgba(255,255,255,.62)}
+.calgrid .cg .today{color:#ff4d5e;font-weight:700}
 .wg-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
 .wg-row input{flex:1}
 .wg-row .op{width:28px;height:28px;flex:0 0 28px;border-radius:7px;border:1px solid var(--line);
@@ -415,6 +420,44 @@ textarea{resize:vertical;min-height:96px}
         <button class="btn" id="btn-save-widget" data-i18n="save">Save</button>
       </div>
     </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2 data-i18n="cal_title">Calendar Widget</h2>
+      <p class="desc" data-i18n="cal_desc">Composite a month calendar onto the wallpaper — on the left by default (info widget stays on the right). Today is marked with a red heart.</p>
+      <div class="row" style="margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="cal-enable" style="width:auto">
+          <span style="color:var(--text);font-size:13px" data-i18n="cal_enable">Enable calendar</span>
+        </label>
+      </div>
+      <div class="grid">
+        <div>
+          <label data-i18n="wg_style">Style</label>
+          <select id="cal-style">
+            <option value="glass" data-i18n="style_glass">Glass (frosted blur)</option>
+            <option value="card" data-i18n="style_card">Card</option>
+            <option value="minimal" data-i18n="style_minimal">Minimal (shadowed text)</option>
+            <option value="banner" data-i18n="style_banner">Bottom banner</option>
+          </select>
+        </div>
+        <div>
+          <label><span data-i18n="wg_opacity">Background opacity</span> · <span id="cal-op-v">55%</span></label>
+          <input type="range" id="cal-opacity" min="0" max="95" step="5" style="width:100%">
+        </div>
+        <div>
+          <label><span data-i18n="cal_scale">Calendar scale</span> · <span id="cal-scale-v">0.5</span></label>
+          <input type="range" id="cal-scale" min="20" max="200" step="5" style="width:100%">
+        </div>
+      </div>
+      <label style="margin-top:14px" data-i18n="cal_preview">Preview (drag the calendar to set position)</label>
+      <div class="wg-preview" id="cal-preview">
+        <div class="wg-drag calgrid" id="cal-drag"></div>
+      </div>
+      <div class="hint" id="cal-pos-hint" data-i18n="cal_drag_hint">Drag the calendar inside the preview; banner style is pinned to the bottom.</div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btn-save-calendar" data-i18n="save">Save</button>
+      </div>
+    </div>
   </section>
 
   <!-- ============ Tab 5: Gallery ============ -->
@@ -469,6 +512,11 @@ en:{
  wg_fields:"Field lines (edit / replace / reorder / add your own)",wg_add:"Add line",
  wg_ph_hint:"Variables — weather: {weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} · solar term: {solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm} · time: {time} {date} · place: {city}. Free text allowed. Icons need a symbol font (Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols).",
  wg_need_ffmpeg:"ffmpeg not found — widget disabled",
+ cal_title:"Calendar Widget",
+ cal_desc:"Composite a month calendar onto the wallpaper — on the left by default (info widget stays on the right). Today is marked with a red heart.",
+ cal_enable:"Enable calendar",cal_scale:"Calendar scale",
+ cal_preview:"Preview (drag the calendar to set position)",
+ cal_drag_hint:"Drag the calendar inside the preview to set its position; banner style is pinned to the bottom.",
  run_status:"Run Status",st_platform:"Platform / Version",st_region:"Network Channel",
  st_weather:"Weather",st_tags:"Tags (weather / hours / temp / solar term)",st_file:"Target File",
  st_misc:"Base Image / API Key",
@@ -530,6 +578,11 @@ zh:{
  wg_fields:"字段行(可编辑 / 替换 / 排序 / 添加自定义话语)",wg_add:"添加一行",
  wg_ph_hint:"可用变量 —— 天气：{weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours}；节气：{solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm}；时间：{time} {date}；地点：{city}。其余文字原样显示，可自由添加话语。图标需系统有符号字体(Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols)。",
  wg_need_ffmpeg:"未找到 ffmpeg，挂件不可用",
+ cal_title:"日历挂件",
+ cal_desc:"在壁纸上合成月历——默认居左(信息挂件保持居右)，今天的日期用红心标出。",
+ cal_enable:"启用日历",cal_scale:"日历缩放",
+ cal_preview:"预览(拖动日历设置位置)",
+ cal_drag_hint:"在预览图中拖动日历设置位置；横幅样式固定底部。",
  run_status:"运行状态",st_platform:"平台 / 版本",st_region:"网络通道",
  st_weather:"天气",st_tags:"标签 (天气 / 时段 / 温度 / 节气)",st_file:"目标文件",
  st_misc:"基准图 / API Key",
@@ -613,11 +666,12 @@ TABS.forEach(name=>$('tabbtn-'+name).onclick=()=>{
     $('tabbtn-'+n).classList.toggle('on',n===name);});
   if(name==='gallery')loadWalls();
   if(name==='adv'&&!DISPLAYS.length)loadDisplays();
-  if(name==='widget'){wgPreviewBg();wgRender();}
+  if(name==='widget'){wgPreviewBg();wgRender();calPlace();calRender();}
 });
 
 /* ---------------- language ---------------- */
 function setLang(l,persist=true){LANG=l;applyI18n();renderStatus(ST_CACHE);renderBases(BASE_CACHE);renderWalls(WALL_CACHE);
+  wgRender();calRender();
   if(persist)api('/api/config',{config:{ui:{language:l}}}).catch(()=>{});}
 $('lang-en').onclick=()=>setLang('en');
 $('lang-zh').onclick=()=>setLang('zh');
@@ -894,6 +948,15 @@ function fillForm(cfg){
   $('wg-fields').innerHTML='';
   (wg.fields&&wg.fields.length?wg.fields:['{city}']).forEach(f=>wgAddField(String(f)));
   wgRender();
+  const cc=cfg.widget_calendar||{};
+  $('cal-enable').checked=!!cc.enabled;
+  $('cal-style').value=cc.style||'glass';
+  $('cal-opacity').value=Math.round(((cc.bg_opacity??0.55))*100);
+  $('cal-op-v').textContent=$('cal-opacity').value+'%';
+  $('cal-scale').value=Math.round((cc.scale??0.5)*100);
+  $('cal-scale-v').textContent=(+$('cal-scale').value/100).toFixed(1);
+  CALPOS={x:+((cc.position||{}).x??0.09),y:+((cc.position||{}).y??0.5)};
+  calPlace();calRender();
   applyI18n();
 }
 $('btn-save-gen').onclick=async()=>{
@@ -1000,7 +1063,7 @@ function wgPreviewBg(){
   if(BASE_CACHE&&BASE_CACHE.active)url='/api/base-image-file?name='+encodeURIComponent(BASE_CACHE.active);
   const g=WALL_CACHE&&WALL_CACHE.groups&&WALL_CACHE.groups[0];
   if(!url&&g&&g.items&&g.items.length)url='/api/wallpaper-file?name='+encodeURIComponent(g.items[0].name);
-  if(url)$('wg-preview').style.backgroundImage=`url(${url})`;
+  if(url){$('wg-preview').style.backgroundImage=`url(${url})`;$('cal-preview').style.backgroundImage=`url(${url})`;}
 }
 (function(){
   const pv=$('wg-preview'),dg=$('wg-drag');
@@ -1032,6 +1095,62 @@ $('btn-save-widget').onclick=async()=>{
     position:{x:+WGPOS.x.toFixed(3),y:+WGPOS.y.toFixed(3)},fields}}});
     toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
 
+/* ---------------- calendar widget ---------------- */
+let CALPOS={x:0.09,y:0.5};
+const CALWD={en:['Mo','Tu','We','Th','Fr','Sa','Su'],zh:['一','二','三','四','五','六','日']};
+function calRender(){
+  const dg=$('cal-drag'),style=$('cal-style').value;
+  dg.className='wg-drag calgrid wgstyle-'+style;
+  dg.style.setProperty('--wgo',(+$('cal-opacity').value)/100);
+  const sc=+$('cal-scale').value/100;
+  dg.style.fontSize=Math.max(6,Math.min(26,11*sc))+'px';
+  const n=new Date(),wd=CALWD[LANG]||CALWD.en;
+  const first=new Date(n.getFullYear(),n.getMonth(),1);
+  const start=(first.getDay()+6)%7;               /* Monday=0 */
+  const days=new Date(n.getFullYear(),n.getMonth()+1,0).getDate();
+  const title=LANG==='zh'?n.getFullYear()+'年'+(n.getMonth()+1)+'月'
+    :first.toLocaleString('en',{month:'long'})+' '+n.getFullYear();
+  let html=`<div class="t">${title}</div><div class="cg">`;
+  wd.forEach((w,i)=>{html+=`<span class="hd${i>=5?' we':''}">${w}</span>`;});
+  for(let i=0;i<start;i++)html+='<span></span>';
+  for(let d=1;d<=days;d++){
+    const col=(start+d-1)%7;
+    html+=d===n.getDate()?`<span class="today">❤${d}</span>`
+      :`<span${col>=5?' class="we"':''}>${d}</span>`;
+  }
+  dg.innerHTML=html+'</div>';
+}
+function calPlace(){
+  $('cal-drag').style.left=(CALPOS.x*100)+'%';
+  $('cal-drag').style.top=(CALPOS.y*100)+'%';
+}
+(function(){
+  const pv=$('cal-preview'),dg=$('cal-drag');
+  const setFromEvent=e=>{
+    const r=pv.getBoundingClientRect();
+    CALPOS.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+    CALPOS.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+    calPlace();
+  };
+  let dragging=false;
+  dg.addEventListener('pointerdown',e=>{
+    if($('cal-style').value==='banner')return;
+    dragging=true;dg.setPointerCapture(e.pointerId);setFromEvent(e);e.preventDefault();
+  });
+  dg.addEventListener('pointermove',e=>{if(dragging)setFromEvent(e);});
+  dg.addEventListener('pointerup',()=>dragging=false);
+  dg.addEventListener('pointercancel',()=>dragging=false);
+})();
+$('cal-style').onchange=calRender;
+$('cal-opacity').oninput=()=>{$('cal-op-v').textContent=$('cal-opacity').value+'%';calRender();};
+$('cal-scale').oninput=()=>{$('cal-scale-v').textContent=(+$('cal-scale').value/100).toFixed(1);calRender();};
+$('btn-save-calendar').onclick=async()=>{
+  try{await api('/api/config',{config:{widget_calendar:{
+    enabled:$('cal-enable').checked,style:$('cal-style').value,
+    bg_opacity:(+$('cal-opacity').value)/100,scale:(+$('cal-scale').value)/100,
+    position:{x:+CALPOS.x.toFixed(3),y:+CALPOS.y.toFixed(3)}}}});
+    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
+
 /* ---------------- init ---------------- */
 (async function init(){
   try{
@@ -1043,7 +1162,7 @@ $('btn-save-widget').onclick=async()=>{
   }catch(e){toast(e.message,true)}
   loadStatus();loadBases();loadWalls();
   loadGenModels();
-  wgRender();wgPlace();
+  wgRender();wgPlace();calRender();calPlace();
   setTimeout(()=>{wgPreviewBg();wgRender();},800);
   setInterval(loadStatus,15000);
 })();
