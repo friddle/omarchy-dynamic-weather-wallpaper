@@ -40,6 +40,7 @@ class App:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()          # 防止后台循环与手动触发并发生图
+        self._precache_gate = threading.Lock()  # 预生成单飞(已在跑则跳过新触发)
         self._stop = threading.Event()
         self.state: dict = {"log": []}
         self._load_state()
@@ -265,6 +266,14 @@ class App:
                 "has_base_image": base_path is not None,
             })
             self.save_state()
+
+            # 6. 默认预生成: 提前备好接下来可能用到的壁纸(时段推进×天气轮转×节气窗口)
+            pcfg = cfg.get("precache") or {}
+            if pcfg.get("enabled", True):
+                threading.Thread(target=self._precache_guarded,
+                                 kwargs={"count": int(pcfg.get("count") or 12)},
+                                 daemon=True, name="weatherwall-precache").start()
+
             return {
                 "ok": True, "region": reg, "weather": dict(info), "tags": tags,
                 "stem": stem, "file": str(apply_target), "cached": cached, "applied": applied,
@@ -282,6 +291,80 @@ class App:
             self.state["last_error"] = err
             self.save_state()
             return None
+
+    # ---------- 预生成 ----------
+
+    def _precache_guarded(self, count: int = 12) -> None:
+        """单飞入口: 已有预生成在跑则直接跳过。"""
+        if not self._precache_gate.acquire(blocking=False):
+            return
+        try:
+            result = self.precache(count)
+            self.log(f"预生成结束: 新生成 {result['generated']} 张, 已缓存跳过 {result['skipped']} 张")
+        except Exception as e:  # noqa: BLE001 - 预生成失败不影响主流程
+            self.log(f"预生成异常: {e}")
+        finally:
+            self._precache_gate.release()
+
+    def precache(self, count: int = 12) -> dict:
+        """预生成接下来可能用到的壁纸(时段推进×天气轮转×当前/下一节气), 写入壁纸库缓存。
+
+        逐张短暂持有 self._lock, 与主流程生图互斥但不长期占锁; 不应用不切壁纸。
+        """
+        cfg = config.load_config()
+        config.ensure_dirs()
+        now = dt.datetime.now()
+        info = dict(self.state.get("last_weather") or {})
+        if not info:
+            reg = region.resolve_region(cfg)
+            info = fetch_weather(cfg, reg)
+        cfg, base_path = self._heal_base_image(cfg)
+        base_name = config.base_stem(cfg)
+        wdir = config.wallpaper_dir(base_name)
+        wdir.mkdir(parents=True, exist_ok=True)
+        lang = str((cfg.get("ui") or {}).get("language") or "en")
+        combos = naming.upcoming_combos(info, now, cfg["naming"], count)
+        self.state["precache"] = {"running": True, "done": 0, "total": len(combos),
+                                  "current": ""}
+        self.save_state()
+        generated = skipped = failed = 0
+        try:
+            for i, tags in enumerate(combos):
+                if self._stop.is_set():
+                    break
+                stem = naming.compose_stem(base_name, tags, (cfg["naming"] or {}).get("cache_key"))
+                self.state["precache"].update({"done": i, "current": stem})
+                self.save_state()
+                if naming.find_cached(wdir, stem):
+                    skipped += 1
+                    continue
+                refs = ref_image_paths()
+                prompt = naming.fill_prompt(
+                    config.active_prompt_template(cfg), tags, str(info.get("city") or ""),
+                    base_name, lang=lang, ref_names=[p.stem for p in refs])
+                gen_cfg = dict(cfg["generator"])
+                size = resolve_size(gen_cfg.get("size"), wallpaper.display_resolution())
+                if size in _UNSUPPORTED:
+                    size = nearest_sizes(size)[0]
+                gen_cfg["size"] = size
+                try:
+                    with self._lock:
+                        data, ext = generate.generate_image(
+                            gen_cfg, prompt, base_path, refs,
+                            proxy=region_net_proxy(cfg))
+                except Exception as e:  # noqa: BLE001 - 单张失败继续后面的
+                    failed += 1
+                    self.log(f"预生成失败 {stem}: {e}")
+                    continue
+                (wdir / f"{stem}.{ext}").write_bytes(data)
+                generated += 1
+                self.log(f"预生成完成: {base_name}/{stem}.{ext} "
+                         f"({tags['weather']}/{tags['daypart']}/{tags['solarterm_cn']})")
+            return {"generated": generated, "skipped": skipped, "failed": failed}
+        finally:
+            self.state["precache"] = {"running": False, "done": len(combos),
+                                      "total": len(combos)}
+            self.save_state()
 
     # ---------- 后台调度 ----------
 
@@ -354,6 +437,7 @@ class App:
             "ffmpeg_install_error": ffmpeg_install_error(),
             "calendar_event_days": len(events),
             "calendar_event_count": sum(len(v) for v in events.values()),
+            "precache": dict(self.state.get("precache") or {}),
             "state": {k: v for k, v in self.state.items() if k != "log"},
             "log": self.state.get("log", [])[-50:],
         }

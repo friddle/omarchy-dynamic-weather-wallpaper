@@ -156,6 +156,8 @@ DEFAULT_CONFIG = {
         "api_host": "",         # 仅 qweather: 控制台分配的专属 API Host(如 abc123.re.qweatherapi.com)
     },
     "refresh_minutes": 30,
+    # 预生成: 每轮结束后后台备好接下来可能用到的壁纸(时段×天气×节气窗口), 命中即秒切
+    "precache": {"enabled": True, "count": 12},
     "network": {
         # 出口代理，如 http://10.10.32.8:7890；留空则直连(仍会读取系统 http_proxy 环境变量)
         "proxy": "",

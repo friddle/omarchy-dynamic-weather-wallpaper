@@ -619,6 +619,16 @@ def make_handler(app: App) -> type:
                     self._json({"ok": True, "prompts": prompts,
                                 "active": cfg["generator"]["active_prompt"]})
 
+                elif url.path == "/api/precache":
+                    cfg_p = config.load_config().get("precache") or {}
+                    count = int(body.get("count") or cfg_p.get("count") or 12)
+                    count = max(1, min(30, count))
+                    if app.state.get("precache", {}).get("running"):
+                        return self._json({"ok": True, "running": True})
+                    threading.Thread(target=app._precache_guarded, kwargs={"count": count},
+                                     daemon=True, name="weatherwall-precache-manual").start()
+                    self._json({"ok": True, "running": True, "count": count})
+
                 elif url.path == "/api/install-ffmpeg":
                     from . import widget as _wg
                     if _FFMPEG_INSTALL["running"]:

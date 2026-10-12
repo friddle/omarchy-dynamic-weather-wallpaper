@@ -140,6 +140,24 @@ class TestNaming(unittest.TestCase):
         self.assertEqual(naming.fill_prompt("no refs {city}", tags, "c", "b",
                                             ref_names=["yinyue"]), "no refs c")
 
+    def test_upcoming_combos(self):
+        now = dt.datetime(2026, 10, 12, 12, 30)  # 中午, 寒露
+        info = {"tag": "cloudy", "temp_current": 30, "temp_min": 25, "temp_max": 32}
+        combos = naming.upcoming_combos(info, now, dict(self.NAMING), count=12)
+        self.assertEqual(len(combos), 12)
+        stems = [naming.compose_stem("x", c) for c in combos]
+        self.assertEqual(len(set(stems)), 12)                 # 全部唯一
+        self.assertEqual(combos[0]["weather"], "cloudy")      # 当前天气优先
+        self.assertEqual(combos[0]["daypart"], "noon")        # 当前时段优先
+        self.assertEqual(combos[0]["solarterm"], "colddew")   # 当前节气
+        self.assertEqual(combos[-1]["solarterm"], "frostfall")  # 后半为下一节气
+        # 时段从当前起顺序推进(noon 之后是 afternoon)
+        self.assertEqual(combos[1]["daypart"], "afternoon")
+        # count=1 只出当前组合
+        one = naming.upcoming_combos(info, now, dict(self.NAMING), count=1)
+        self.assertEqual((one[0]["weather"], one[0]["daypart"], one[0]["solarterm"]),
+                         ("cloudy", "noon", "colddew"))
+
     def test_find_cached(self):
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)

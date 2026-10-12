@@ -161,6 +161,61 @@ def find_cached(cache_dir: Path, stem: str) -> Path | None:
     return None
 
 
+# 预生成用的天气轮转序列(全量 tag, 当前天气优先)
+PRESET_WEATHERS = ("sunny", "partlycloudy", "cloudy", "overcast", "rain",
+                   "drizzle", "heavyrain", "thundershower", "snow",
+                   "fog", "haze", "wind")
+
+
+def upcoming_combos(info: dict, now, naming_cfg: dict, count: int = 12) -> list[dict]:
+    """预生成候选: 从当前时段起, 接下来最可能用到的 count 组标签组合。
+
+    组成维度(当前值优先):
+      period     按小时顺序推进的去重时段序列(noon→afternoon→dusk→...→latenight→morning)
+      weather    当前天气 + 其余常见天气轮转
+      solarterm  前半用当前节气, 后半用下一节气(节气切换前提前备好)
+    返回完整 tags 字典列表(供 compose_stem/生图直接使用), 已按 stem 去重。
+    """
+    base = compose_tags(info, now, naming_cfg)
+    # 时段: 当前起按小时推进, 去重保持顺序(覆盖未来 ~25 小时)
+    periods: list[str] = []
+    for h in range(26):
+        dp = daypart_of((now.hour + h) % 24)
+        if dp not in periods:
+            periods.append(dp)
+    # 天气: 当前优先, 其余按 PRESET_WEATHERS 顺序轮转
+    cur_w = str(base["weather"])
+    weathers = [cur_w] + [w for w in PRESET_WEATHERS if w != cur_w]
+    # 节气: 当前 + 下一(顺序由 current_term 的表序给出)
+    terms = _term_window(base["solarterm"])
+    half = max(1, count // 2)
+
+    combos: list[dict] = []
+    seen: set[str] = set()
+    for i in range(count):
+        tags = dict(base)
+        tags["weather"] = weathers[i % len(weathers)]
+        tags["period"] = tags["daypart"] = periods[i % len(periods)]
+        tags["solarterm"] = terms[0] if i < half else terms[min(1, len(terms) - 1)]
+        stem = compose_stem("x", tags, (naming_cfg or {}).get("cache_key"))
+        if stem in seen:
+            continue
+        seen.add(stem)
+        combos.append(tags)
+    return combos
+
+
+def _term_window(cur_en: str) -> list[str]:
+    """[当前节气, 下一节气]。"""
+    try:
+        from .solarterm import TERMS
+        order = [en for _, en, _, _ in TERMS]
+        i = order.index(cur_en)
+        return [cur_en, order[(i + 1) % len(order)]]
+    except (ValueError, ImportError):  # noqa: BLE001
+        return [cur_en]
+
+
 def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str = "en",
                 ref_names: list[str] | None = None) -> str:
     """把占位符填进生图 prompt 模板。

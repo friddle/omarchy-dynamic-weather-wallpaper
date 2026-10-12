@@ -103,10 +103,18 @@ function renderStatus(st){
     :'—';
   $('st-misc').innerHTML=(st.base_image_exists?`<span class="badge ok">${esc(st.base_image)}</span>`:'<span class="badge warn">—</span>')
     +' '+(st.has_api_key?'<span class="badge ok">API Key ✓</span>':'<span class="badge warn">'+t('no_key')+'</span>');
+  /* 预生成进度 */
+  const genOk=!!st.has_api_key;
+  const pc=st.precache||{};
+  $('precache-status').textContent=pc.running
+    ?`${t('pc_running')} ${pc.done||0}/${pc.total||'?'} … ${pc.current||''}`
+    :t('pc_idle');
+  const btnPc=$('btn-precache');
+  btnPc.disabled=!!pc.running||!genOk;
+  btnPc.style.opacity=(pc.running||!genOk)?'0.5':'';
   $('log').textContent=(st.log||[]).join('\n');
   const lb=$('log');lb.scrollTop=lb.scrollHeight;
   /* 未配置生图 API Key: 禁用 立即刷新/强制重新生图(后端接口同步拦截) */
-  const genOk=!!st.has_api_key;
   ['btn-refresh','btn-force'].forEach(id=>{
     const b=$(id);b.disabled=!genOk;b.title=genOk?'':t('t_key_required');
     b.style.opacity=genOk?'':'0.5';
@@ -523,6 +531,9 @@ $('btn-refresh').onclick=async()=>{try{const r=await api('/api/refresh',{apply:t
 $('btn-force').onclick=async()=>{if(!confirm(t('t_confirm_force')))return;
   try{const r=await api('/api/force-generate',{apply:true});
   toast(r.queued?t('t_gen_q'):t('t_gen_ok'));loadStatus();loadWalls();}catch(e){toast(e.message,true)}};
+$('btn-precache').onclick=async()=>{try{
+  const r=await api('/api/precache',{});
+  toast(r.running?t('pc_running'):'ok');loadStatus();}catch(e){toast(e.message,true)}};
 $('btn-test').onclick=async()=>{try{const r=await api('/api/test-weather',{force:false});
   $('test-result').innerHTML=`
   <div class="kv"><span class="k">${t('st_weather')}</span><span class="v">${esc(r.weather.city)} · ${esc(WX_NAME[LANG][r.weather.tag]||r.weather.desc)} · ${r.weather.temp_current}℃ · ${esc(r.weather.provider)}</span></div>
