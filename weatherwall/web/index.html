@@ -408,6 +408,19 @@
   </div>
 </div>
 
+<!-- 本机令牌门: 手动打开(无 #t= fragment)时输入一次 -->
+<div id="modal-token" class="modal hidden">
+  <div class="modal-box card" style="margin:0;max-width:480px">
+    <h2 data-i18n="tok_title">Local Access Token</h2>
+    <p class="desc" data-i18n="tok_desc">This settings page is only for the current user. Launch it from the app to sign in automatically, or paste your local token once.</p>
+    <input type="password" id="token-input" placeholder="token…" autocomplete="off">
+    <div class="hint" data-i18n="tok_hint">Token file: macOS ~/Library/Application Support/omarchy-dynamic-wallpaper/token · Linux ~/.config/omarchy-dynamic-wallpaper/token · Windows %APPDATA%\omarchy-dynamic-wallpaper\token — or run `python3 -m weatherwall serve` and copy the URL it prints.</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="token-go" data-i18n="tok_go">Sign in</button>
+    </div>
+  </div>
+</div>
+
 <!-- 挂件放大预览弹窗 -->
 <div id="modal-wgview" class="modal hidden">
   <div class="modal-box">

@@ -1,6 +1,35 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+/* ---------------- 本机令牌 ---------------- */
+/* 启动器以 URL fragment(#t=...) 带入令牌: fragment 不会发往服务器, 取出后立即从地址栏清除,
+   只保留在本标签页会话里。手动打开(无 fragment)时由令牌门输入一次。 */
+(function(){
+  const grab=()=>{
+    const m=location.hash.match(/[#&]t=([A-Za-z0-9_-]+)/);
+    if(m){
+      sessionStorage.setItem('ww_token',m[1]);
+      try{history.replaceState(null,'',location.pathname);}catch(_){}
+    }
+  };
+  grab();
+  window.addEventListener('hashchange',grab);   /* 已打开的页面再收到 #t= 也能登录 */
+})();
+const APITOKEN=sessionStorage.getItem('ww_token')||'';
+function showTokenGate(){
+  const m=$('modal-token');if(!m||!m.classList.contains('hidden'))return;
+  m.classList.remove('hidden');
+  $('token-input').value=sessionStorage.getItem('ww_token')||'';
+}
+$('token-go').onclick=()=>{
+  const v=$('token-input').value.trim();
+  if(!v)return;
+  sessionStorage.setItem('ww_token',v);
+  location.reload();
+};
+$('token-input').addEventListener('keydown',e=>{if(e.key==='Enter')$('token-go').click();});
+$('modal-token').onclick=e=>{if(e.target.id==='modal-token')$('modal-token').classList.add('hidden');};
+
 let LANG='en';
 const t=k=>I18N[LANG][k]??I18N.en[k]??k;
 function applyI18n(){
@@ -19,6 +48,7 @@ async function api(path,body){
   const hs={'X-Token':(typeof APITOKEN!=='undefined')?APITOKEN:''};
   const opt=body!==undefined?{method:'POST',headers:Object.assign(hs,{'Content-Type':'application/json'}),body:JSON.stringify(body)}:{headers:hs};
   const r=await fetch(path,opt);const j=await r.json().catch(()=>({ok:false,error:'bad response'}));
+  if(j&&j.error==='unauthorized')showTokenGate();
   if(!j.ok&&j.error)throw new Error(j.error);return j;}
 
 /* ---------------- tabs ---------------- */
@@ -732,6 +762,7 @@ window.addEventListener('resize',syncBigIfOpen);
     fillForm(cfg.config);
     renderStatus(ST_CACHE);
   }catch(e){toast(e.message,true)}
+  if(!APITOKEN)showTokenGate();
   loadStatus();loadBases();loadWalls();loadRefs();loadCalendarEvents();
   loadGenModels();
   wgRender();wgPlace();calRender();calPlace();

@@ -716,6 +716,53 @@ class TestCalendarEvents(unittest.TestCase):
         self.assertEqual(lay0["underlines"], [])
 
 
+class TestLocalTokenSecurity(unittest.TestCase):
+    """令牌不得出现在任何无鉴权响应里(防同机其他账户抓页面复用 X-Token)。"""
+
+    def setUp(self):
+        import tempfile
+        from weatherwall import server
+        self._td = tempfile.TemporaryDirectory()
+        root = Path(self._td.name)
+        (root / "token").write_text("unit-test-token\n", encoding="utf-8")
+        server._TOKEN = ""   # 清掉模块级缓存
+        self._server = server
+        self._patchers = [
+            mock.patch.object(config, "config_dir", return_value=root),
+        ]
+        for p in self._patchers:
+            p.start()
+
+    def tearDown(self):
+        import importlib
+        for p in self._patchers:
+            p.stop()
+        self._server._TOKEN = ""
+        self._td.cleanup()
+
+    def test_index_html_carries_no_token(self):
+        from weatherwall import server
+        html = server._index_html()
+        self.assertNotIn(b"APITOKEN", html)          # 不再注入令牌脚本
+        self.assertNotIn(b"unit-test-token", html)    # 令牌本体绝不在页面里
+        self.assertIn(b"app.js", html)                # 页面壳仍完整
+
+    def test_settings_url_uses_fragment(self):
+        from weatherwall import server
+        url = server.settings_url(8765)
+        self.assertIn("#t=unit-test-token", url)      # 令牌走 fragment
+        self.assertTrue(url.startswith("http://127.0.0.1:8765/#t="))
+
+    def test_status_log_never_contains_token(self):
+        # serve() 的令牌地址走 print(), app.log(/api/status 可见)只打无令牌 URL
+        import inspect
+        from weatherwall import server
+        src = inspect.getsource(server.serve)
+        self.assertIn("settings_url", src)            # 打印用带令牌地址
+        log_line = next(l for l in src.splitlines() if "app.log" in l)
+        self.assertNotIn("_auth_token", log_line)
+
+
 class TestSchedulerHelpers(unittest.TestCase):
     def test_is_network_error(self):
         from weatherwall.app import is_network_error

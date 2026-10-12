@@ -79,7 +79,8 @@ def cmd_gui(app: App, args) -> int:
     cfg = config.load_config()
     host = args.host or cfg["server"]["host"]
     port = args.port or cfg["server"]["port"]
-    url = f"http://127.0.0.1:{port}"
+    # URL fragment 携带本机令牌(#t=), 不会出现在任何请求/日志里
+    url = f"http://127.0.0.1:{port}/#t={server._auth_token()}"
 
     def _port_open() -> bool:
         with socket.socket() as s:

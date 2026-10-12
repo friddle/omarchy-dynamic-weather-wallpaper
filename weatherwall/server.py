@@ -1,5 +1,12 @@
 """本地设置后台：HTTP API + 静态设置页，仅绑定 127.0.0.1。
 
+鉴权模型(防同机其他账户跨账户访问):
+  - 页面与只读状态接口开放, 但页面是纯静态壳, 不含任何令牌;
+  - 变更类接口要求 X-Token 请求头, 令牌仅存 0600 的 token 文件(属主可读);
+  - 令牌通过启动器 URL fragment(#t=...) 进入页面, fragment 不随请求发往服务器,
+    也不写入任何日志(/api/status 可见的 app.log 中不含令牌);
+  - 手动打开页面时显示令牌门, 需从属主终端的启动输出或 token 文件获取。
+
 API:
   GET  /                      设置页
   GET  /api/status            运行状态/最近日志
@@ -86,11 +93,19 @@ def _auth_token() -> str:
 
 
 def _index_html() -> bytes:
-    """返回注入了令牌的设置页(注入到首个 script 标签之前, 页面 JS 自动携带)。"""
-    data = web_index_path().read_bytes()
-    inject = (b"<script>var APITOKEN=" + json.dumps(_auth_token()).encode() + b";</script>")
-    i = data.find(b"<script")   # 兼容 <script src=...> 外链形式
-    return data[:i] + inject + data[i:] if i >= 0 else data + inject
+    """设置页(纯静态壳, 不含任何令牌 —— 无鉴权返回它也不再泄露凭据)。
+
+    令牌由启动器经 URL fragment(#t=) 带入页面, JS 存 sessionStorage 后随 X-Token 头使用;
+    fragment 不会出现在任何 HTTP 请求/服务端日志里。手动打开需在令牌门里输入一次。
+    """
+    return web_index_path().read_bytes()
+
+
+def settings_url(port: int | None = None, host: str = "127.0.0.1") -> str:
+    """带令牌 fragment 的设置页地址(仅供本用户进程/终端使用, 勿写入 app.log)。"""
+    if port is None:
+        port = config.load_config()["server"]["port"]
+    return f"http://{host}:{port}/#t={_auth_token()}"
 
 
 def web_index_path() -> Path:
@@ -660,6 +675,8 @@ def make_handler(app: App) -> type:
 def serve(app: App, host: str, port: int) -> None:
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
     app.log(f"设置后台已启动: http://{host}:{port}")
+    # 令牌地址只打到属主终端, 绝不进 app.log(/api/status 对外可见会泄露令牌)
+    print(f"设置页(本机令牌已附): {settings_url(port, host if host != '0.0.0.0' else '127.0.0.1')}", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
