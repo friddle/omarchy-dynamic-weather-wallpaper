@@ -161,7 +161,8 @@ def find_cached(cache_dir: Path, stem: str) -> Path | None:
     return None
 
 
-def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str = "en") -> str:
+def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str = "en",
+                ref_names: list[str] | None = None) -> str:
     """把占位符填进生图 prompt 模板。
 
     多语言占位符:
@@ -170,6 +171,7 @@ def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str 
       {weather} {solarterm} {period}                 文件名标签(tag, 恒为英文)
       {morning}/{forenoon}/...                       仅当前时段输出该词, 其余为空
       {time_HH:mm} {date_YYYY-MM-DD}                 带格式时间/日期
+      {ref_names}                                    参考图名(逗号连接, 无参考图为空)
     """
     from .solarterm import solarterm_display
     from .weather import weather_display
@@ -185,6 +187,7 @@ def fill_prompt(template: str, tags: dict, city: str, base_name: str, lang: str 
         "daypart_name": daypart_display(tags.get("daypart", ""), lang),
         "city": city,
         "base_name": base_name,
+        "ref_names": ", ".join(str(n) for n in (ref_names or [])),
         **period_word_repl(tags, lang),
     }
     out = template

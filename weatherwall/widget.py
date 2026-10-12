@@ -13,9 +13,11 @@ compose() 返回 JPEG bytes; 失败抛 WidgetError, 调用方应回退使用原�
 import datetime
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -80,6 +82,42 @@ def _require_drawtext() -> str:
     if not ffmpeg_has_drawtext(ffmpeg):
         raise WidgetError("当前 ffmpeg 缺少 drawtext 滤镜, 请安装完整版(如 brew reinstall ffmpeg)")
     return ffmpeg
+
+
+def install_command() -> list[str] | None:
+    """当前平台安装/修复 ffmpeg 的命令(优先用户态包管理器); 无法确定返回 None。
+
+    已装 ffmpeg 但缺 drawtext 滤镜时自动改用重装(brew reinstall / apt install --reinstall)。
+    macOS: Homebrew(自动探测 arm/x86 路径); Windows: winget/choco/scoop;
+    Linux: apt/dnf/pacman/zypper(非 root 时自动加 sudo)。
+    """
+    ffmpeg = find_ffmpeg()
+    broken = ffmpeg is not None and not ffmpeg_has_drawtext(ffmpeg)
+    if sys.platform == "darwin":
+        for b in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+            if os.path.exists(b):
+                return [b, "reinstall" if broken else "install", "ffmpeg"]
+        if shutil.which("brew"):
+            return [shutil.which("brew"), "reinstall" if broken else "install", "ffmpeg"]
+        return None
+    if os.name == "nt":
+        for cmd in (["winget", "install", "--id", "Gyan.FFmpeg", "-e",
+                     "--accept-source-agreements", "--accept-package-agreements"],
+                    ["choco", "install", "ffmpeg", "-y"],
+                    ["scoop", "install", "ffmpeg"]):
+            if shutil.which(cmd[0]):
+                return cmd
+        return None
+    # Linux
+    sudo = [] if os.geteuid() == 0 else (["sudo"] if shutil.which("sudo") else [])
+    apt = ["apt-get", "install", "-y"] + (["--reinstall"] if broken else []) + ["ffmpeg"]
+    for cmd in (apt,
+                ["dnf", "install", "-y", "ffmpeg"],
+                ["pacman", "-S", "--noconfirm", "ffmpeg"],
+                ["zypper", "install", "-y", "ffmpeg"]):
+        if shutil.which(cmd[0]):
+            return sudo + cmd
+    return None
 
 
 def available() -> bool:
@@ -511,10 +549,112 @@ def calendar_cells(now: datetime.datetime, lang: str = "en") -> dict:
     }
 
 
+# ---------- macOS 日历导入 ----------
+
+EVENT_COLOR = "0xffa640@0.98"  # 有日程的日子: 橙色数字+底部横线(今天仍为红色)
+
+
+def events_file() -> Path:
+    from . import config
+    return config.cache_dir() / "events.json"
+
+
+def load_events() -> dict[str, list[str]]:
+    """已导入的日程 {YYYY-MM-DD: [标题...]}; 未导入/损坏返回空。"""
+    try:
+        data = json.loads(events_file().read_text(encoding="utf-8"))
+        ev = data.get("events")
+        return {str(k): list(v) for k, v in ev.items()} if isinstance(ev, dict) else {}
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return {}
+
+
+def parse_calendar_output(text: str) -> dict[str, list[str]]:
+    """osascript 输出(每行 ISO|标题) -> {YYYY-MM-DD: [标题...]}。纯函数便于测试。"""
+    out: dict[str, list[str]] = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if "|" not in line:
+            continue
+        iso, _, title = line.partition("|")
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})T", iso.strip())
+        if not m:
+            continue
+        out.setdefault("-".join(m.groups()), []).append(title.strip() or "(event)")
+    return out
+
+
+def macos_calendar_applescript(start: datetime.date, end: datetime.date) -> str:
+    """读取区间内全部日历事件。首次运行触发 macOS 自动化/日历权限申请。"""
+    def mkdate(d: datetime.date) -> str:
+        # 用组件赋值构造, 避免日期字符串的本地化解析差异
+        return (f"set dt to current date\n"
+                f"set day of dt to 1\nset year of dt to {d.year}\n"
+                f"set month of dt to {d.month}\nset day of dt to {d.day}\n"
+                f"set hours of dt to 0\nset minutes of dt to 0\nset seconds of dt to 0\n"
+                f"return dt")
+
+    # macOS 27 起把日期 coerce 成 «class isot» 文本会报错, 改用组件手工拼 ISO 串
+    script = (
+        "on pad2(n)\n"
+        "return text -2 thru -1 of (\"0\" & n)\n"
+        "end pad2\n"
+        "on isoOf(sd)\n"
+        "return ((year of sd) as string) & \"-\" & pad2(month of sd as integer) "
+        "& \"-\" & pad2(day of sd) & \"T\" & pad2(hours of sd) & \":\" & pad2(minutes of sd) & \":00\"\n"
+        "end isoOf\n"
+        f"on mkStart()\n{mkdate(start)}\nend mkStart\n"
+        f"on mkEnd()\n{mkdate(end)}\nend mkEnd\n"
+        "set dStart to mkStart()\n"
+        "set dEnd to mkEnd()\n"
+        "set out to \"\"\n"
+        "tell application \"Calendar\"\n"
+        "repeat with cal in calendars\n"
+        "try\n"
+        "set evs to (every event of cal whose start date ≥ dStart and start date < dEnd)\n"
+        "repeat with ev in evs\n"
+        "set out to out & (my isoOf(start date of ev)) & \"|\" & (summary of ev) & linefeed\n"
+        "end repeat\n"
+        "end try\n"
+        "end repeat\n"
+        "end tell\n"
+        "return out"
+    )
+    try:
+        r = subprocess.run(["osascript", "-e", script],
+                           capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired as e:
+        raise WidgetError("读取 macOS 日历超时(日历较多时首次同步可能偏慢, 稍后重试)") from e
+    if r.returncode != 0:
+        err = r.stderr.decode("utf-8", "replace").strip()
+        if "-1743" in err or "not allowed" in err.lower():
+            raise WidgetError("日历访问被拒: 系统设置 → 隐私与安全性 → 日历, 勾选 osascript/终端 后重试")
+        if "-600" in err or "application isn't running" in err.lower():
+            raise WidgetError("日历.app 未响应, 打开一次日历应用后重试")
+        raise WidgetError(f"读取 macOS 日历失败: {err[:200]}")
+    return r.stdout.decode("utf-8", "replace")
+
+
+def import_macos_calendar(days_back: int = 15, days_forward: int = 60) -> dict:
+    """导出 [today-days_back, today+days_forward) 的日历事件并落盘。返回事件字典。"""
+    today = datetime.date.today()
+    text = macos_calendar_applescript(today - datetime.timedelta(days=days_back),
+                                      today + datetime.timedelta(days=days_forward))
+    events = parse_calendar_output(text)
+    payload = {"imported_at": datetime.datetime.now().isoformat(timespec="seconds"),
+               "events": events}
+    events_file().parent.mkdir(parents=True, exist_ok=True)
+    events_file().write_text(json.dumps(payload, ensure_ascii=False, indent=1),
+                             encoding="utf-8")
+    return events
+
+
 def calendar_layout(img_w: int, img_h: int, ccfg: dict,
-                    now: datetime.datetime, lang: str = "en") -> dict:
-    """日历挂件盒与每个文本单元的 px 坐标。今日单元用红色, 其余白色。"""
+                    now: datetime.datetime, lang: str = "en",
+                    event_days: set[int] | None = None) -> dict:
+    """日历挂件盒与每个文本单元的 px 坐标。今日红色, 有日程的日子橙色+横线标注。"""
     cal = calendar_cells(now, lang)
+    event_days = event_days or set()
     scale = max(0.1, min(3.0, float(ccfg.get("scale") or 0.5)))
     base = max(14, round(img_w / 34 * scale))
     pad = round(base * 0.9)
@@ -551,6 +691,7 @@ def calendar_layout(img_w: int, img_h: int, ccfg: dict,
                 "w": _text_width(text, sz), "center": True}
 
     cells = []
+    underlines = []   # 有日程日子的底部横线(橙色)
     y = float(by + pad)
     cells.append({**cell(0, y, cal["title"], title_sz, "white@0.97"), "center": False})
     y += title_h + gap
@@ -560,11 +701,24 @@ def calendar_layout(img_w: int, img_h: int, ccfg: dict,
     for week in cal["weeks"]:
         for i, d in enumerate(week):
             if d:
-                cells.append(cell(i, y, str(d), day_sz,
-                                  "0xff4d5e@0.98" if d == now.day else "white@0.96"))
+                if d == now.day:
+                    color = "0xff4d5e@0.98"
+                elif d in event_days:
+                    color = EVENT_COLOR
+                else:
+                    color = "white@0.96"
+                c = cell(i, y, str(d), day_sz, color)
+                cells.append(c)
+                if d in event_days and d != now.day:
+                    underlines.append({
+                        "x": c["x"] + round((cw - gap) * 0.18),
+                        "y": round(y) + round(day_sz * 1.12),
+                        "w": round((cw - gap) * 0.64),
+                        "h": max(2, round(day_sz * 0.09)),
+                    })
         y += rh
     return {"box": [bx, by, box_w, box_h], "pad": pad, "cells": cells,
-            "day_sz": day_sz, "gap": gap}
+            "underlines": underlines, "day_sz": day_sz, "gap": gap}
 
 
 def _cal_ffargs(lay: dict, ccfg: dict, font: str, tdir: Path, img_w: int) -> list[str]:
@@ -581,11 +735,15 @@ def _cal_ffargs(lay: dict, ccfg: dict, font: str, tdir: Path, img_w: int) -> lis
         texts.append((c, tf))
     minimal = style == "minimal"
     dt = ",".join(_drawtext(c, c, font, tf, minimal) for c, tf in texts)
+    # 有日程日子的底部横线(所有样式都画)
+    ul = ",".join(f"drawbox=x={u['x']}:y={u['y']}:w={u['w']}:h={u['h']}:"
+                  f"color={EVENT_COLOR}:t=fill" for u in lay.get("underlines", []))
+    marks = f"{ul}," if ul else ""
     if minimal:  # 无背景, 仅阴影文字
-        return ["-vf", dt]
+        return ["-vf", marks + dt]
     if style == "banner":  # 底部整幅横幅
         box = f"drawbox=x=0:y={by}:w={img_w}:h={bh}:color=black@{op}:t=fill"
-        return ["-vf", f"{box},{dt}"]
+        return ["-vf", f"{box},{marks}{dt}"]
     border = f"drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=white@0.22:t=3"
     if style == "glass":
         blur_r = max(4, lay["pad"] // 2)
@@ -593,21 +751,25 @@ def _cal_ffargs(lay: dict, ccfg: dict, font: str, tdir: Path, img_w: int) -> lis
               f"[bg]crop={bw}:{bh}:{bx}:{by},boxblur={blur_r}[bl];"
               f"[fg][bl]overlay={bx}:{by}[comp];"
               f"[comp]drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=black@{round(op * 0.45, 2)}:t=fill,"
-              f"{border},{dt}[vout]")
+              f"{border},{marks}{dt}[vout]")
         return ["-filter_complex", fc, "-map", "[vout]"]
     box = f"drawbox=x={bx}:y={by}:w={bw}:h={bh}:color=black@{op}:t=fill"
-    return ["-vf", f"{box},{border},{dt}"]
+    return ["-vf", f"{box},{border},{marks}{dt}"]
 
 
 def compose_calendar(data: bytes, ccfg: dict, now: datetime.datetime,
                      lang: str = "en") -> tuple[bytes, str]:
-    """日历挂件主入口: 壁纸 bytes -> 合成月历后的 (jpeg bytes, "jpg")。今日红色高亮。"""
+    """日历挂件主入口: 壁纸 bytes -> 合成月历后的 (jpeg bytes, "jpg")。
+    今日红色; 已导入日历日程的日子橙色+横线。"""
     ffmpeg = _require_drawtext()
     font = find_font()
     if font is None:
         raise WidgetError("未找到可用字体文件")
     img_w, img_h = _probe_size(data)
-    lay = calendar_layout(img_w, img_h, ccfg, now, lang)
+    ev = load_events()
+    prefix = now.strftime("%Y-%m-")
+    event_days = {int(d[len(prefix):]) for d in ev if d.startswith(prefix)}
+    lay = calendar_layout(img_w, img_h, ccfg, now, lang, event_days)
 
     with tempfile.TemporaryDirectory(prefix="weatherwall-cal-") as td:
         tdir = Path(td)

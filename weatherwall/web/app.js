@@ -32,7 +32,7 @@ TABS.forEach(name=>$('tabbtn-'+name).onclick=()=>{
 });
 
 /* ---------------- language ---------------- */
-function setLang(l,persist=true){LANG=l;applyI18n();renderStatus(ST_CACHE);renderBases(BASE_CACHE);renderWalls(WALL_CACHE);
+function setLang(l,persist=true){LANG=l;applyI18n();renderStatus(ST_CACHE);renderBases(BASE_CACHE);renderRefs();renderWalls(WALL_CACHE);
   wgRender();calRender();
   if(persist)api('/api/config',{config:{ui:{language:l}}}).catch(()=>{});}
 $('lang-en').onclick=()=>setLang('en');
@@ -75,8 +75,40 @@ function renderStatus(st){
     +' '+(st.has_api_key?'<span class="badge ok">API Key ✓</span>':'<span class="badge warn">'+t('no_key')+'</span>');
   $('log').textContent=(st.log||[]).join('\n');
   const lb=$('log');lb.scrollTop=lb.scrollHeight;
+  /* 未配置生图 API Key: 禁用 立即刷新/强制重新生图(后端接口同步拦截) */
+  const genOk=!!st.has_api_key;
+  ['btn-refresh','btn-force'].forEach(id=>{
+    const b=$(id);b.disabled=!genOk;b.title=genOk?'':t('t_key_required');
+    b.style.opacity=genOk?'':'0.5';
+  });
+  /* ffmpeg 状态: 不可用时给出原因徽标 + 一键安装按钮(mac: brew, 其他平台同理) */
   $('wg-ffwarn').classList.toggle('hidden',!!st.widget_ready);
+  if(!st.widget_ready){
+    $('wg-ffwarn').textContent=st.ffmpeg_found&&!st.ffmpeg_drawtext
+      ?(LANG==='zh'?'ffmpeg 缺少 drawtext 滤镜 — 需重装完整版':'ffmpeg lacks drawtext — reinstall full build')
+      :t('wg_need_ffmpeg');
+  }
+  /* ffmpeg 不可用: 挂件功能整体禁用(仅保留警告与安装按钮) */
+  setWidgetEnabled(!!st.widget_ready);
+  const installing=!!st.ffmpeg_install_running;
+  $('wg-ffinstall').classList.toggle('hidden',!!st.widget_ready||installing);
+  $('wg-ffinstall').disabled=installing;
+  if(installing&&!$('wg-ffwarn').classList.contains('hidden'))
+    $('wg-ffwarn').textContent=t('wg_installing');
+  if(st.ffmpeg_install_error&&!installing&&!$('wg-ffwarn').classList.contains('hidden'))
+    $('wg-ffwarn').title=st.ffmpeg_install_error;
+  /* macOS 专属: 导入系统日历按钮 */
+  $('cal-import').classList.toggle('hidden',st.platform!=='macOS');
   if(!$('tab-widget').classList.contains('hidden'))wgRender();
+}
+
+/* 挂件 tab 控件开关: ffmpeg 不可用时全部禁用, 仅保留警告徽标与安装按钮 */
+function setWidgetEnabled(on){
+  $('tab-widget').querySelectorAll('input,select,button,textarea').forEach(el=>{
+    if(el.id==='wg-ffinstall')return;   /* 安装按钮保持可用 */
+    el.disabled=!on;
+  });
+  document.getElementById('tab-widget').style.opacity=on?'':'0.75';
 }
 
 /* ---------------- base images ---------------- */
@@ -301,7 +333,12 @@ function fillForm(cfg){
   $('gen-key').placeholder=cfg.generator?.api_key?(LANG==='zh'?'已配置(点击可修改)':'configured'):'sk-...';
   $('gen-model').value=cfg.generator?.model||'gpt-image-1';
   $('gen-size').value=cfg.generator?.size||'auto';
-  $('gen-prompt').value=cfg.generator?.prompt||'';
+  PROMPTS=(cfg.generator?.prompts&&cfg.generator.prompts.length)
+    ?cfg.generator.prompts:[{name:'default',template:cfg.generator?.prompt||''}];
+  PT_ACTIVE=cfg.generator?.active_prompt||PROMPTS[0].name;
+  if(!PROMPTS.some(p=>p.name===PT_ACTIVE))PT_ACTIVE=PROMPTS[0].name;
+  PT_EDIT=PT_ACTIVE;
+  renderPrompts();
   LANG=cfg.ui?.language||'en';$('cfg-lang').value=LANG;
   const wg=cfg.widget||{};
   $('wg-enable').checked=!!wg.enabled;
@@ -337,7 +374,7 @@ $('btn-save-gen').onclick=async()=>{
   try{await api('/api/config',{config:{generator:{
     base_url:$('gen-base-url').value.trim()||'https://api.openai.com/v1',
     api_key:$('gen-key').value.trim(),model:$('gen-model').value.trim()||'gpt-image-1',
-    size:$('gen-size').value,prompt:$('gen-prompt').value}}});
+    size:$('gen-size').value}}});
     toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
 $('gen-key').oninput=()=>{$('gen-key').style.borderColor='';};
 async function loadGenModels(){
@@ -349,6 +386,89 @@ async function loadGenModels(){
 }
 $('gen-base-url').addEventListener('change',loadGenModels);
 $('gen-key').addEventListener('change',loadGenModels);
+
+/* ---------------- prompt 模板管理(命名多条, 本地存储于 config.json) ---------------- */
+let PROMPTS=[],PT_ACTIVE='',PT_EDIT='';
+function renderPrompts(){
+  const box=$('prompt-list');box.innerHTML='';
+  for(const p of PROMPTS){
+    const c=document.createElement('button');
+    c.className='chip'+(p.name===PT_EDIT?' on':'');
+    c.textContent=(p.name===PT_ACTIVE?'✓ ':'')+p.name;
+    c.title=p.name===PT_ACTIVE?t('pt_active'):'';
+    c.onclick=()=>{PT_EDIT=p.name;renderPrompts();};
+    box.appendChild(c);
+  }
+  const cur=PROMPTS.find(p=>p.name===PT_EDIT);
+  $('gen-prompt').value=cur?cur.template:'';
+  $('pt-cur').textContent=`${t('pt_active')}: ${PT_ACTIVE} · ${t('pt_editing')}: ${PT_EDIT}`;
+}
+async function promptCfg(action,name){
+  try{
+    const r=await api('/api/prompt-cfg',{action,name,template:$('gen-prompt').value});
+    PROMPTS=r.prompts;PT_ACTIVE=r.active;
+    if(!PROMPTS.some(p=>p.name===PT_EDIT))PT_EDIT=PT_ACTIVE;
+    renderPrompts();toast(t('t_saved'));
+  }catch(e){toast(e.message,true)}
+}
+$('pt-add').onclick=()=>{
+  const name=prompt(t('pt_name_prompt'));
+  if(name===null)return;
+  if(!name.trim())return toast(t('pt_name_prompt'),true);
+  PT_EDIT='';   // 新建后由服务端归一化命名, 响应里同步
+  promptCfg('add',name.trim());
+};
+$('pt-save').onclick=()=>promptCfg('save',PT_EDIT);
+$('pt-select').onclick=()=>promptCfg('select',PT_EDIT);
+$('pt-del').onclick=()=>promptCfg('delete',PT_EDIT);
+
+/* ---------------- 参考图(角色/风格样例, 随生图上传) ---------------- */
+let REF_CACHE=null;
+async function loadRefs(){try{REF_CACHE=await api('/api/ref-images');renderRefs();}catch(e){/* 静默 */}}
+function renderRefs(){
+  const r=REF_CACHE;if(!r)return;
+  const el=$('ref-list');
+  el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">'+t('t_no_ref')+'</div>';
+  for(const it of r.items){
+    const d=document.createElement('div');
+    d.className='base-item';
+    d.innerHTML=`<span class="ops"><button class="op" data-act="del" title="${t('del')}">🗑</button></span>
+      <img src="/api/ref-image-file?name=${encodeURIComponent(it.name)}">
+      <div class="nm">${esc(it.name)}</div>`;
+    d.querySelector('[data-act=del]').onclick=e=>{e.stopPropagation();
+      if(confirm(t('del_confirm')+' '+it.name+' ?'))delRef(it.name);};
+    el.appendChild(d);
+  }
+}
+async function delRef(name){
+  try{await api('/api/ref-image-delete',{name});toast(LANG==='zh'?'已删除':'Deleted');loadRefs();}
+  catch(e){toast(e.message,true)}
+}
+async function uploadRef(file){
+  if(!file)return;
+  if(file.size>30*1024*1024)return toast('>30MB',true);
+  const buf=await file.arrayBuffer();
+  let bin='';const bytes=new Uint8Array(buf);const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  try{const r=await api('/api/ref-image',{name:file.name,data_b64:btoa(bin)});
+    toast((LANG==='zh'?'上传成功: ':'Uploaded: ')+r.name);loadRefs();
+  }catch(e){toast(e.message,true)}
+}
+$('ref-drop').onclick=()=>$('ref-file').click();
+$('ref-file').onchange=e=>{[...e.target.files].forEach(uploadRef);e.target.value='';};
+$('ref-drop').ondragover=e=>{e.preventDefault();$('ref-drop').classList.add('drag')};
+$('ref-drop').ondragleave=()=>$('ref-drop').classList.remove('drag');
+$('ref-drop').ondrop=e=>{e.preventDefault();$('ref-drop').classList.remove('drag');
+  [...e.dataTransfer.files].forEach(uploadRef)};
+
+/* ---------------- ffmpeg 一键安装 ---------------- */
+$('wg-ffinstall').onclick=async()=>{
+  try{
+    await api('/api/install-ffmpeg',{});
+    toast(t('wg_installing'));
+    $('wg-ffinstall').disabled=true;
+  }catch(e){toast(e.message,true)}
+};
 $('btn-save-weather').onclick=async()=>{try{await api('/api/config',{config:{weather:collectWeather(),
   region:$('cfg-region').value,network:{proxy:$('cfg-proxy').value.trim()}}});
   toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
@@ -545,14 +665,30 @@ function calRender(){
   let html=`<div class="t">${title}</div><div class="cg">`;
   wd.forEach((w,i)=>{html+=`<span class="hd${i>=5?' we':''}">${w}</span>`;});
   for(let i=0;i<start;i++)html+='<span></span>';
+  const evp=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-';
   for(let d=1;d<=days;d++){
     const col=(start+d-1)%7;
-    html+=d===n.getDate()?`<span class="today">${d}</span>`
-      :`<span${col>=5?' class="we"':''}>${d}</span>`;
+    const cls=d===n.getDate()?'today':(CALEVT[evp+String(d).padStart(2,'0')]?'evt':(col>=5?'we':''));
+    html+=cls?`<span class="${cls}">${d}</span>`:`<span>${d}</span>`;
   }
   dg.innerHTML=expBtn()+html+'</div>';
   syncBigIfOpen();
 }
+/* 已导入的日历日程 {YYYY-MM-DD: [标题...]}: 月历中对应日子标橙 */
+let CALEVT={};
+async function loadCalendarEvents(){
+  try{const r=await api('/api/calendar-events');CALEVT=r.events||{};calRender();}
+  catch(e){/* 静默 */}
+}
+$('cal-import').onclick=async()=>{
+  const st=$('cal-import-status');
+  st.textContent=t('cal_importing');
+  try{
+    const r=await api('/api/calendar-import',{});
+    st.textContent=r.count?t('cal_import_done')+r.days+'d / '+r.count:t('cal_import_empty');
+    await loadCalendarEvents();
+  }catch(e){st.textContent='';toast(e.message,true)}
+};
 function calPlace(){
   $('cal-drag').style.left=(CALPOS.x*100)+'%';
   $('cal-drag').style.top=(CALPOS.y*100)+'%';
@@ -596,7 +732,7 @@ window.addEventListener('resize',syncBigIfOpen);
     fillForm(cfg.config);
     renderStatus(ST_CACHE);
   }catch(e){toast(e.message,true)}
-  loadStatus();loadBases();loadWalls();
+  loadStatus();loadBases();loadWalls();loadRefs();loadCalendarEvents();
   loadGenModels();
   wgRender();wgPlace();calRender();calPlace();
   setTimeout(()=>{wgPreviewBg();wgRender();},800);

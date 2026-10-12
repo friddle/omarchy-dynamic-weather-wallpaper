@@ -62,6 +62,15 @@
     </div>
     <div class="card">
       <div class="stephead"><div class="stepnum">2</div><div>
+        <h2 data-i18n="ref_title">Reference Images</h2>
+        <p class="desc" data-i18n="ref_desc">Character art or style samples sent with every AI request (multi-image image-to-image). Use {ref_names} in the prompt to reference them by name.</p>
+      </div></div>
+      <div class="dropzone" id="ref-drop" data-i18n="ref_drop">Click or drag reference images here (jpg / png / webp, ≤30MB, up to 4 sent per request)</div>
+      <input type="file" id="ref-file" accept=".jpg,.jpeg,.png,.webp" hidden multiple>
+      <div class="base-list" id="ref-list" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <div class="stephead"><div class="stepnum">3</div><div>
         <h2 data-i18n="ai_title">AI Image Generation</h2>
         <p class="desc" data-i18n="ai_desc">Any OpenAI-compatible images API. With a base image it calls images/edits (image-to-image); without one it calls images/generations.</p>
       </div></div>
@@ -92,9 +101,17 @@
           <div class="hint" data-i18n="ai_size_hint">Any WxH your API supports; auto = provider default. Your monitor's native size gives the sharpest wallpaper.</div>
         </div>
         <div style="grid-column:1/-1">
-          <label data-i18n="ai_prompt">Prompt Template</label>
+          <label data-i18n="ai_prompt_list">Prompt Templates</label>
+          <div class="wall-groups" id="prompt-list" style="margin-bottom:8px"></div>
           <textarea id="gen-prompt"></textarea>
-          <div class="hint" data-i18n="ai_ph">Placeholders: {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} — English template recommended; Chinese works too.</div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="pt-add">＋ <span data-i18n="pt_add">New</span></button>
+            <button class="btn ghost small" id="pt-save">💾 <span data-i18n="save">Save</span></button>
+            <button class="btn ghost small" id="pt-select">✓ <span data-i18n="pt_select">Set active</span></button>
+            <button class="btn ghost small" id="pt-del">🗑 <span data-i18n="del">Delete</span></button>
+            <span class="hint" id="pt-cur"></span>
+          </div>
+          <div class="hint" style="margin-top:6px" data-i18n="ai_ph">Placeholders: {weather_name} {weather_cn} {weather} {temp} {temp_min} {temp_max} {period_name} {period} {solarterm_name} {solarterm} {city} {time} {ref_names} — English template recommended; Chinese works too.</div>
         </div>
       </div>
       <div class="row" style="margin-top:14px">
@@ -292,6 +309,7 @@
           <span style="color:var(--text);font-size:13px" data-i18n="wg_enable">Enable widget</span>
         </label>
         <span id="wg-ffwarn" class="badge err hidden" style="margin-left:auto" data-i18n="wg_need_ffmpeg">ffmpeg not found — widget disabled</span>
+        <button id="wg-ffinstall" class="btn small hidden" style="margin-left:auto" data-i18n="wg_install_ffmpeg">⚙ Install ffmpeg</button>
       </div>
       <div class="grid">
         <div>
@@ -331,6 +349,8 @@
           <input type="checkbox" id="cal-enable" style="width:auto">
           <span style="color:var(--text);font-size:13px" data-i18n="cal_enable">Enable calendar</span>
         </label>
+        <button class="btn ghost small hidden" id="cal-import" style="margin-left:auto">📅 <span data-i18n="cal_import">Import macOS Calendar</span></button>
+        <span id="cal-import-status" class="hint"></span>
       </div>
       <div class="grid">
         <div>

@@ -178,7 +178,9 @@ DEFAULT_CONFIG = {
         "api_key": "",
         "model": "gpt-image-1",
         "size": "auto",           # auto / 1024x1024 / 1536x1024 / 1024x1536
-        "prompt": DEFAULT_PROMPT,
+        "prompt": DEFAULT_PROMPT,             # 兼容字段: 与生效模板保持同步
+        "prompts": [{"name": "default", "template": DEFAULT_PROMPT}],  # 多模板, 本地存储
+        "active_prompt": "default",           # 生效模板名
         "timeout_seconds": 300,
     },
     "server": {"host": "127.0.0.1", "port": 8765},
@@ -242,6 +244,11 @@ def config_file() -> Path:
 
 def base_images_dir() -> Path:
     return _base_dir() / "base_images"
+
+
+def ref_images_dir() -> Path:
+    """参考图目录: 角色立绘/风格样例, 随生图请求一并上传(images/edits 多图)。"""
+    return _base_dir() / "ref_images"
 
 
 def cache_dir() -> Path:
@@ -316,7 +323,29 @@ def load_config() -> dict:
         # 升级迁移: 旧版默认 Prompt 自动换成最新默认
         if cfg["generator"].get("prompt") in LEGACY_PROMPTS:
             cfg["generator"]["prompt"] = DEFAULT_PROMPT
+        # 多模板迁移: 旧配置只有单个 prompt(非当前默认) -> prompts 列表
+        _default_prompts = [{"name": "default", "template": DEFAULT_PROMPT}]
+        if cfg["generator"].get("prompts") == _default_prompts \
+                and cfg["generator"].get("prompt") not in (None, "", DEFAULT_PROMPT):
+            cfg["generator"]["prompts"] = [{"name": "default",
+                                            "template": cfg["generator"]["prompt"]}]
+        if not any(p.get("name") == cfg["generator"].get("active_prompt")
+                   for p in cfg["generator"]["prompts"]):
+            cfg["generator"]["active_prompt"] = cfg["generator"]["prompts"][0]["name"]
     return cfg
+
+
+def active_prompt_template(cfg: dict) -> str:
+    """当前生效的 prompt 模板(active 指向的; 缺失回落第一条, 再回落兼容字段)。"""
+    g = cfg.get("generator") or {}
+    name = g.get("active_prompt")
+    prompts = g.get("prompts") or []
+    for p in prompts:
+        if p.get("name") == name and p.get("template"):
+            return p["template"]
+    if prompts and prompts[0].get("template"):
+        return prompts[0]["template"]
+    return g.get("prompt") or DEFAULT_PROMPT
 
 
 def save_config(cfg: dict) -> None:

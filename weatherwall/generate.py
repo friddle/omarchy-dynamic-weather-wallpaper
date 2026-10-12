@@ -13,6 +13,7 @@ import struct
 import urllib.error
 import uuid
 import zlib
+from pathlib import Path
 
 from . import net
 
@@ -21,8 +22,8 @@ class GenerateError(Exception):
     pass
 
 
-def _multipart(fields: dict, file_field: str, filename: str, content: bytes,
-               content_type: str) -> tuple[bytes, str]:
+def _multipart(fields: dict, files: list[tuple[str, str, bytes, str]]) -> tuple[bytes, str]:
+    """组装 multipart: files = [(field, filename, content, content_type), ...]。"""
     boundary = "----weatherwall" + uuid.uuid4().hex
     parts = []
     for k, v in fields.items():
@@ -30,14 +31,16 @@ def _multipart(fields: dict, file_field: str, filename: str, content: bytes,
             f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n"
             .encode("utf-8")
         )
-    parts.append(
-        (
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"{file_field}\"; "
-            f"filename=\"{filename}\"\r\nContent-Type: {content_type}\r\n\r\n"
-        ).encode("utf-8")
-    )
-    parts.append(content)
-    parts.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+    for field, filename, content, ctype in files:
+        parts.append(
+            (
+                f"--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; "
+                f"filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        parts.append(content)
+        parts.append(b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
     return b"".join(parts), boundary
 
 
@@ -96,16 +99,28 @@ def make_placeholder_png(size: tuple[int, int] = (1600, 1000)) -> bytes:
     return png
 
 
-def generate_image(cfg_gen: dict, prompt: str, base_path=None, proxy: str = "") -> tuple[bytes, str]:
-    """主入口：返回 (bytes, ext)。未配置 key 时走降级逻辑。"""
+def _img_mime(path) -> str:
+    return ("image/jpeg" if Path(path).suffix.lower() in (".jpg", ".jpeg")
+            else "image/webp" if Path(path).suffix.lower() == ".webp" else "image/png")
+
+
+def generate_image(cfg_gen: dict, prompt: str, base_path=None,
+                   ref_paths: list | None = None, proxy: str = "") -> tuple[bytes, str]:
+    """主入口：返回 (bytes, ext)。未配置 key 时走降级逻辑。
+
+    ref_paths: 参考图(角色立绘/风格样例)。有基准图时作为追加图片(images/edits
+    的重复 image[] 字段); 无基准图时第一张参考图顶替基准图位置。
+    """
     api_key = (cfg_gen.get("api_key") or "").strip()
     base_url = (cfg_gen.get("base_url") or "").rstrip("/")
     timeout = float(cfg_gen.get("timeout_seconds") or 300)
+    refs = [p for p in (ref_paths or []) if p is not None]
 
     if not api_key:
         # 降级：无 key 直接用基准图当壁纸(或占位图)，方便先跑通流程
-        if base_path is not None:
-            data = base_path.read_bytes()
+        first = base_path if base_path is not None else (refs[0] if refs else None)
+        if first is not None:
+            data = Path(first).read_bytes()
             return data, _ext_of(data)
         return make_placeholder_png(), "png"
 
@@ -113,16 +128,26 @@ def generate_image(cfg_gen: dict, prompt: str, base_path=None, proxy: str = "") 
     model = cfg_gen.get("model") or "gpt-image-1"
     size = cfg_gen.get("size") or "auto"
 
-    if base_path is not None:
+    if base_path is not None or refs:
         url = f"{base_url}/images/edits"
         fields = {"model": model, "prompt": prompt, "n": "1", "size": size}
         if model.startswith("gpt-image"):
             fields["output_format"] = "jpeg"   # gpt-image 系列支持直接出 jpeg
         else:
             fields["response_format"] = "b64_json"
-        body, boundary = _multipart(fields, "image", base_path.name,
-                                    base_path.read_bytes(),
-                                    "image/jpeg" if base_path.suffix.lower() in (".jpg", ".jpeg") else "image/png")
+        files = []
+        if base_path is not None:
+            files.append(("image", Path(base_path).name,
+                          Path(base_path).read_bytes(), _img_mime(base_path)))
+        # 参考图走 OpenAI 多图字段 image[]; 无基准图时第一张顶替 image
+        for i, ref in enumerate(refs):
+            if base_path is None and i == 0:
+                files.append(("image", Path(ref).name, Path(ref).read_bytes(),
+                              _img_mime(ref)))
+            else:
+                files.append(("image[]", Path(ref).name, Path(ref).read_bytes(),
+                              _img_mime(ref)))
+        body, boundary = _multipart(fields, files)
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
     else:
         url = f"{base_url}/images/generations"

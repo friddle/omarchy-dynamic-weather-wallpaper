@@ -17,6 +17,14 @@ API:
   POST /api/base-image        上传基准图 {name, data_b64}
   POST /api/base-image-select 选择生效基准图 {name}
   POST /api/base-image-delete 删除基准图 {name}
+  GET  /api/ref-images        参考图列表(角色/风格样例, 随生图上传)
+  GET  /api/ref-image-file?name=...  取参考图文件(预览用)
+  POST /api/ref-image         上传参考图 {name, data_b64}
+  POST /api/ref-image-delete  删除参考图 {name}
+  POST /api/prompt-cfg        prompt 模板管理 {action: add/save/select/delete, name, template}
+  POST /api/install-ffmpeg    后台安装 ffmpeg(平台包管理器)
+  GET  /api/calendar-events   已导入的日历日程
+  POST /api/calendar-import   导入 macOS 系统日历(触发权限申请, 仅 macOS)
 """
 
 import base64
@@ -26,6 +34,7 @@ import json
 import os
 import re
 import secrets
+import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,13 +51,14 @@ from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
 # 防止同机其他账户未授权读取密钥或改动配置。
 _OPEN_PATHS = {"/", "/index.html", "/style.css", "/app.js", "/i18n.js",
                "/api/status", "/api/cities",
-               "/api/wallpaper-file", "/api/base-image-file"}
+               "/api/wallpaper-file", "/api/base-image-file", "/api/ref-image-file"}
 
 # 设置页静态资源及 MIME(按扩展名)
 _WEB_STATIC = {"/style.css": "text/css", "/app.js": "application/javascript",
                "/i18n.js": "application/javascript"}
 
 _TOKEN = ""
+_FFMPEG_INSTALL = {"running": False, "error": None}   # 后台安装 ffmpeg 的状态
 
 
 def _auth_token() -> str:
@@ -270,6 +280,23 @@ def make_handler(app: App) -> type:
                         return self._json({"ok": False, "error": "文件不存在"}, 404)
                     self._file(p, "image/jpeg" if p.suffix.lower() in (".jpg", ".jpeg") else
                                ("image/png" if p.suffix.lower() == ".png" else "image/webp"))
+                elif url.path == "/api/ref-images":
+                    d = config.ref_images_dir()
+                    items = sorted((p for p in d.glob("*")
+                                    if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS),
+                                   key=lambda p: p.name) if d.exists() else []
+                    self._json({"ok": True, "items": [_image_entry(p) for p in items]})
+                elif url.path == "/api/ref-image-file":
+                    p = _safe_file(config.ref_images_dir(), (qs.get("name") or [""])[0])
+                    if not p:
+                        return self._json({"ok": False, "error": "文件不存在"}, 404)
+                    self._file(p, "image/jpeg" if p.suffix.lower() in (".jpg", ".jpeg") else
+                               ("image/png" if p.suffix.lower() == ".png" else "image/webp"))
+                elif url.path == "/api/calendar-events":
+                    from . import widget as _wg
+                    ev = _wg.load_events()
+                    self._json({"ok": True, "events": ev,
+                                "count": sum(len(v) for v in ev.values())})
                 else:
                     self._json({"ok": False, "error": "not found"}, 404)
             except Exception as e:  # noqa: BLE001
@@ -334,14 +361,23 @@ def make_handler(app: App) -> type:
                     tags = naming.compose_tags(info, now, cfg["naming"])
                     stem = naming.compose_stem(config.base_stem(cfg), tags)
                     cached = naming.find_cached(config.cache_dir(), stem)
-                    prompt = naming.fill_prompt(cfg["generator"].get("prompt") or config.DEFAULT_PROMPT,
-                                                tags, info["city"], config.base_stem(cfg),
-                                                lang=str((cfg.get("ui") or {}).get("language") or "en"))
+                    from .app import ref_image_paths
+                    refs = ref_image_paths()
+                    prompt = naming.fill_prompt(
+                        config.active_prompt_template(cfg), tags, info["city"],
+                        config.base_stem(cfg),
+                        lang=str((cfg.get("ui") or {}).get("language") or "en"),
+                        ref_names=[p.stem for p in refs])
                     self._json({"ok": True, "region": reg, "weather": dict(info),
                                 "tags": tags, "stem": stem, "cached": cached is not None,
                                 "prompt": prompt})
 
                 elif url.path in ("/api/refresh", "/api/force-generate"):
+                    cfg_g = config.load_config()["generator"]
+                    if not (cfg_g.get("api_key") or "").strip():
+                        return self._json({
+                            "ok": False,
+                            "error": "尚未配置生图 API Key — 请在 Base & AI 标签页填写后再刷新"}, 400)
                     apply_ = bool(body.get("apply", True))
                     force = url.path == "/api/force-generate" or bool(body.get("force"))
                     result = {}
@@ -482,6 +518,137 @@ def make_handler(app: App) -> type:
                     p.unlink()
                     app.log(f"删除基准图: {name}")
                     self._json({"ok": True})
+
+                elif url.path == "/api/ref-image":
+                    name = str(body.get("name") or "").strip()
+                    data_b64 = str(body.get("data_b64") or "")
+                    if not name or not SAFE_NAME.match(name):
+                        return self._json({"ok": False, "error": "文件名非法"}, 400)
+                    try:
+                        data = base64.b64decode(data_b64)
+                    except Exception:
+                        return self._json({"ok": False, "error": "data_b64 解码失败"}, 400)
+                    if len(data) > 30 * 1024 * 1024:
+                        return self._json({"ok": False, "error": "文件超过 30MB"}, 400)
+                    suffix = Path(name).suffix.lower()
+                    if suffix not in config.WALLPAPER_EXTS:
+                        suffix = ".png"
+                    safe = _unique_name(config.ref_images_dir(),
+                                        config.normalize_stem(name) + suffix)
+                    config.ensure_dirs()
+                    config.ref_images_dir().mkdir(parents=True, exist_ok=True)
+                    (config.ref_images_dir() / safe).write_bytes(data)
+                    app.log(f"上传参考图: {safe}")
+                    self._json({"ok": True, "name": safe})
+
+                elif url.path == "/api/ref-image-delete":
+                    name = str(body.get("name") or "")
+                    p = _safe_file(config.ref_images_dir(), name)
+                    if not p:
+                        return self._json({"ok": False, "error": "文件不存在"}, 404)
+                    p.unlink()
+                    app.log(f"删除参考图: {name}")
+                    self._json({"ok": True})
+
+                elif url.path == "/api/prompt-cfg":
+                    action = str(body.get("action") or "")
+                    name = str(body.get("name") or "").strip()
+                    template = str(body.get("template") or "")
+                    cfg = config.load_config()
+                    prompts = cfg["generator"].setdefault("prompts", [])
+                    if not prompts:
+                        prompts.append({"name": "default", "template": config.DEFAULT_PROMPT})
+                    active = cfg["generator"].get("active_prompt") or prompts[0]["name"]
+
+                    def sync_prompt():
+                        # 兼容字段: 与生效模板保持同步
+                        for p in prompts:
+                            if p["name"] == cfg["generator"].get("active_prompt"):
+                                cfg["generator"]["prompt"] = p["template"]
+                                return
+
+                    if action == "add":
+                        norm = config.normalize_stem(name) or f"prompt_{len(prompts) + 1}"
+                        if any(p["name"] == norm for p in prompts):
+                            return self._json({"ok": False, "error": f"模板名已存在: {norm}"}, 400)
+                        prompts.append({"name": norm,
+                                        "template": template or config.DEFAULT_PROMPT})
+                        cfg["generator"]["active_prompt"] = norm
+                        app.log(f"新增 prompt 模板: {norm}")
+                    elif action == "save":
+                        p = next((p for p in prompts if p["name"] == name), None)
+                        if not p:
+                            return self._json({"ok": False, "error": "模板不存在"}, 404)
+                        if not template.strip():
+                            return self._json({"ok": False, "error": "模板内容为空"}, 400)
+                        p["template"] = template
+                        app.log(f"保存 prompt 模板: {name}")
+                    elif action == "select":
+                        if not any(p["name"] == name for p in prompts):
+                            return self._json({"ok": False, "error": "模板不存在"}, 404)
+                        cfg["generator"]["active_prompt"] = name
+                        app.log(f"切换生效 prompt 模板: {name}")
+                    elif action == "delete":
+                        if len(prompts) <= 1:
+                            return self._json({"ok": False, "error": "至少保留一个模板"}, 400)
+                        if not any(p["name"] == name for p in prompts):
+                            return self._json({"ok": False, "error": "模板不存在"}, 404)
+                        prompts[:] = [p for p in prompts if p["name"] != name]
+                        if active == name:
+                            cfg["generator"]["active_prompt"] = prompts[0]["name"]
+                        app.log(f"删除 prompt 模板: {name}")
+                    else:
+                        return self._json({"ok": False, "error": "action 无效"}, 400)
+                    sync_prompt()
+                    config.save_config(cfg)
+                    self._json({"ok": True, "prompts": prompts,
+                                "active": cfg["generator"]["active_prompt"]})
+
+                elif url.path == "/api/install-ffmpeg":
+                    from . import widget as _wg
+                    if _FFMPEG_INSTALL["running"]:
+                        return self._json({"ok": True, "running": True})
+                    cmd = _wg.install_command()
+                    if not cmd:
+                        return self._json({
+                            "ok": False,
+                            "error": "未找到可用的包管理器(brew/winget/choco/scoop/apt/dnf/pacman), 请手动安装 ffmpeg"},
+                            400)
+
+                    def install_work():
+                        _FFMPEG_INSTALL["running"] = True
+                        _FFMPEG_INSTALL["error"] = None
+                        try:
+                            app.log(f"开始安装 ffmpeg: {' '.join(cmd)} (可能需要几分钟)")
+                            r = subprocess.run(cmd, capture_output=True, timeout=1800)
+                            if r.returncode != 0:
+                                tail = r.stderr.decode("utf-8", "replace").strip()[-300:]
+                                _FFMPEG_INSTALL["error"] = tail
+                                app.log(f"ffmpeg 安装失败: {tail}")
+                            else:
+                                _wg._DRAWTEXT_CACHE.clear()
+                                if _wg.available():
+                                    app.log("ffmpeg 安装完成, 挂件功能已可用")
+                                else:
+                                    app.log("安装命令执行完成, 但未检测到可用 ffmpeg, 可能需要重启服务")
+                        except Exception as e:  # noqa: BLE001
+                            _FFMPEG_INSTALL["error"] = str(e)
+                            app.log(f"ffmpeg 安装失败: {e}")
+                        finally:
+                            _FFMPEG_INSTALL["running"] = False
+
+                    threading.Thread(target=install_work, daemon=True,
+                                     name="ffmpeg-installer").start()
+                    self._json({"ok": True, "running": True})
+
+                elif url.path == "/api/calendar-import":
+                    from . import widget as _wg
+                    if sys.platform != "darwin":
+                        return self._json({"ok": False, "error": "仅 macOS 支持导入系统日历"}, 400)
+                    events = _wg.import_macos_calendar()
+                    count = sum(len(v) for v in events.values())
+                    app.log(f"macOS 日历导入完成: {len(events)} 天 / {count} 条日程")
+                    self._json({"ok": True, "days": len(events), "count": count})
                 else:
                     self._json({"ok": False, "error": "not found"}, 404)
             except Exception as e:  # noqa: BLE001

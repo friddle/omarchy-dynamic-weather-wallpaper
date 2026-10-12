@@ -106,6 +106,40 @@ class TestNaming(unittest.TestCase):
         self.assertEqual(repl["noon"], "")  # 非当前时段为空
         self.assertEqual(repl["morning"], "")
 
+    def test_prompt_templates_migration_and_active(self):
+        import json
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "config.json"
+            # 旧配置(单 prompt) -> 迁移为 prompts 列表
+            f.write_text(json.dumps({"generator": {"prompt": "my {temp} tpl"}}), encoding="utf-8")
+            with mock.patch("weatherwall.config.config_file", return_value=f):
+                cfg = config.load_config()
+            self.assertEqual(cfg["generator"]["prompts"],
+                             [{"name": "default", "template": "my {temp} tpl"}])
+            self.assertEqual(cfg["generator"]["active_prompt"], "default")
+            self.assertEqual(config.active_prompt_template(cfg), "my {temp} tpl")
+            # 多模板: active 指向其中一条; 缺失回落 prompts[0]
+            f.write_text(json.dumps({"generator": {
+                "prompts": [{"name": "a", "template": "A {city}"},
+                            {"name": "b", "template": "B"}],
+                "active_prompt": "b"}}), encoding="utf-8")
+            with mock.patch("weatherwall.config.config_file", return_value=f):
+                cfg = config.load_config()
+            self.assertEqual(config.active_prompt_template(cfg), "B")
+            cfg["generator"]["active_prompt"] = "gone"
+            self.assertEqual(config.active_prompt_template(cfg), "A {city}")
+
+    def test_fill_prompt_ref_names(self):
+        tags = naming.compose_tags(self.weather(), dt.datetime(2026, 2, 5, 13), self.NAMING)
+        out = naming.fill_prompt("refs=[{ref_names}]", tags, "c", "b",
+                                 ref_names=["yinyue", "style"])
+        self.assertEqual(out, "refs=[yinyue, style]")
+        # 模板没有 {ref_names} 就不出现
+        self.assertEqual(naming.fill_prompt("no refs {city}", tags, "c", "b",
+                                            ref_names=["yinyue"]), "no refs c")
+
     def test_find_cached(self):
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
@@ -565,6 +599,121 @@ class TestDaypart(unittest.TestCase):
         # 带格式时间占位符
         out3 = naming.fill_prompt("{time_HH:mm} {date_MMDD}", tags, "杭州市", "b", lang="zh")
         self.assertEqual(out3, "18:15 1011")
+
+
+class TestGenerateMultiImage(unittest.TestCase):
+    """参考图: multipart 携带 image[] 字段; 无 key 降级; 名字占位符联动。"""
+
+    def test_multipart_with_refs(self):
+        import tempfile
+        from unittest import mock
+        from weatherwall import generate
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td) / "base.jpg"
+            ref1 = Path(td) / "yinyue.png"
+            ref2 = Path(td) / "style.png"
+            base.write_bytes(b"\xff\xd8\xffbase")
+            ref1.write_bytes(b"\x89PNG\r\n\x1a\nref1data")
+            ref2.write_bytes(b"\x89PNG\r\n\x1a\nref2data")
+            captured = {}
+
+            def fake_http(url, data, headers, timeout, proxy):
+                captured["url"] = url
+                captured["data"] = data
+                return {"data": [{"b64_json": generate.base64.b64encode(b"\xff\xd8\xffout").decode()}]}
+
+            cfg = {"api_key": "sk-x", "base_url": "https://api.test/v1",
+                   "model": "gpt-image-1", "size": "auto", "timeout_seconds": 5}
+            with mock.patch.object(generate.net, "http_json", side_effect=fake_http):
+                generate.generate_image(cfg, "draw refs", base, [ref1, ref2])
+            self.assertTrue(captured["url"].endswith("/images/edits"))
+            body = captured["data"]
+            self.assertIn(b'name="image"; filename="base.jpg"', body)   # 基准图
+            self.assertEqual(body.count(b'name="image[]"'), 2)          # 两张参考图
+            self.assertIn(b"filename=\"yinyue.png\"", body)
+            self.assertIn(b"draw refs", body)
+
+    def test_refs_without_base_uses_first_as_edit_base(self):
+        import tempfile
+        from unittest import mock
+        from weatherwall import generate
+        with tempfile.TemporaryDirectory() as td:
+            ref = Path(td) / "yinyue.png"
+            ref.write_bytes(b"\x89PNG\r\n\x1a\nrefdata")
+            captured = {}
+
+            def fake_http(url, data, headers, timeout, proxy):
+                captured["url"] = url
+                captured["data"] = data
+                return {"data": [{"b64_json": generate.base64.b64encode(b"\xff\xd8\xffout").decode()}]}
+
+            cfg = {"api_key": "sk-x", "base_url": "https://api.test/v1",
+                   "model": "gpt-image-1", "size": "auto", "timeout_seconds": 5}
+            with mock.patch.object(generate.net, "http_json", side_effect=fake_http):
+                generate.generate_image(cfg, "p", None, [ref])
+            self.assertTrue(captured["url"].endswith("/images/edits"))
+            self.assertIn(b'name="image"; filename="yinyue.png"', captured["data"])
+            self.assertNotIn(b'name="image[]"', captured["data"])
+
+    def test_no_key_degrades_to_ref(self):
+        import tempfile
+        from weatherwall import generate
+        with tempfile.TemporaryDirectory() as td:
+            ref = Path(td) / "r.png"
+            ref.write_bytes(b"\x89PNG\r\n\x1a\ndata")
+            data, ext = generate.generate_image({"api_key": ""}, "p", None, [ref])
+            self.assertEqual((data, ext), (ref.read_bytes(), "png"))
+
+    def test_install_command_platform(self):
+        import sys as _sys
+        from unittest import mock
+        from weatherwall import widget
+        # mac + brew: 未装 -> install; 已装但缺 drawtext -> reinstall
+        if _sys.platform == "darwin":
+            with mock.patch.object(widget, "find_ffmpeg", return_value=None), \
+                 mock.patch.object(widget.os.path, "exists",
+                                   side_effect=lambda p: p == "/opt/homebrew/bin/brew"):
+                self.assertEqual(widget.install_command(),
+                                 ["/opt/homebrew/bin/brew", "install", "ffmpeg"])
+            with mock.patch.object(widget, "find_ffmpeg", return_value="/opt/homebrew/bin/ffmpeg"), \
+                 mock.patch.object(widget, "ffmpeg_has_drawtext", return_value=False), \
+                 mock.patch.object(widget.os.path, "exists",
+                                   side_effect=lambda p: p == "/opt/homebrew/bin/brew"):
+                self.assertEqual(widget.install_command(),
+                                 ["/opt/homebrew/bin/brew", "reinstall", "ffmpeg"])
+            with mock.patch.object(widget, "find_ffmpeg", return_value=None), \
+                 mock.patch.object(widget.shutil, "which", return_value=None), \
+                 mock.patch.object(widget.os.path, "exists", return_value=False):
+                self.assertIsNone(widget.install_command())
+
+
+class TestCalendarEvents(unittest.TestCase):
+    def test_parse_calendar_output(self):
+        from weatherwall import widget
+        text = ("2026-10-12T09:00:00|Weekly\n"
+                "2026-10-18T00:00:00|All day\n"
+                "garbage line\n"
+                "2026-10-18T14:30:00|Review\n")
+        ev = widget.parse_calendar_output(text)
+        self.assertEqual(ev, {"2026-10-12": ["Weekly"],
+                              "2026-10-18": ["All day", "Review"]})
+        self.assertEqual(widget.parse_calendar_output(""), {})
+
+    def test_calendar_layout_event_marks(self):
+        import datetime as dtt
+        from weatherwall import widget
+        now = dtt.datetime(2026, 10, 12, 9, 30)
+        lay = widget.calendar_layout(3840, 2160, {"scale": 0.5}, now, "en",
+                                     event_days={15, 20})
+        colors = {c["text"]: c["color"] for c in lay["cells"]}
+        self.assertTrue(colors["15"].startswith("0xffa640"))   # 事件日橙色
+        self.assertTrue(colors["20"].startswith("0xffa640"))
+        self.assertTrue(colors["12"].startswith("0xff4d5e"))   # 今天红色
+        self.assertTrue(colors["13"].startswith("white"))
+        self.assertEqual(len(lay["underlines"]), 2)            # 两条橙色横线
+        # 无事件: 无横线
+        lay0 = widget.calendar_layout(3840, 2160, {"scale": 0.5}, now, "en")
+        self.assertEqual(lay0["underlines"], [])
 
 
 class TestSchedulerHelpers(unittest.TestCase):

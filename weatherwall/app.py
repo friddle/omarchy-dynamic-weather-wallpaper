@@ -134,9 +134,11 @@ class App:
                 # AI 图重新生成过: 成品合成签名作废, 强制重走挂件合成
                 self.state["compose_sig"] = None
             if target is None:
+                refs = ref_image_paths()
                 prompt = naming.fill_prompt(
-                    cfg["generator"].get("prompt") or "", tags, info["city"], base_name,
-                    lang=str((cfg.get("ui") or {}).get("language") or "en"))
+                    config.active_prompt_template(cfg), tags, info["city"], base_name,
+                    lang=str((cfg.get("ui") or {}).get("language") or "en"),
+                    ref_names=[p.stem for p in refs])
                 gen_cfg = dict(cfg["generator"])
                 size = resolve_size(gen_cfg.get("size"), wallpaper.display_resolution())
                 if size in _UNSUPPORTED:  # 进程内已知被拒: 直接取最近候选, 不再撞一次
@@ -145,7 +147,7 @@ class App:
                 try:
                     try:
                         data, ext = generate.generate_image(
-                            gen_cfg, prompt, base_path,
+                            gen_cfg, prompt, base_path, refs,
                             proxy=region_net_proxy(cfg))
                     except Exception as e:
                         # 目标尺寸不被接口支持(如 2560x1600): 由近到远换候选重试,
@@ -160,7 +162,7 @@ class App:
                             gen_cfg["size"] = cand
                             try:
                                 data, ext = generate.generate_image(
-                                    gen_cfg, prompt, base_path,
+                                    gen_cfg, prompt, base_path, refs,
                                     proxy=region_net_proxy(cfg))
                                 break
                             except Exception as e2:
@@ -328,8 +330,13 @@ class App:
         try:
             from . import widget as infowidget
             widget_ready = infowidget.available()
+            ffmpeg_found = infowidget.find_ffmpeg() is not None
+            ffmpeg_drawtext = (infowidget.find_ffmpeg() is not None
+                               and infowidget.ffmpeg_has_drawtext(infowidget.find_ffmpeg()))
+            events = infowidget.load_events()
         except Exception:  # noqa: BLE001
-            widget_ready = False
+            widget_ready = ffmpeg_found = ffmpeg_drawtext = False
+            events = {}
         return {
             "version": _version(),
             "platform": _platform(),
@@ -341,6 +348,12 @@ class App:
             "base_image_exists": base is not None,
             "has_api_key": bool(cfg["generator"].get("api_key")),
             "widget_ready": widget_ready,
+            "ffmpeg_found": ffmpeg_found,
+            "ffmpeg_drawtext": ffmpeg_drawtext,
+            "ffmpeg_install_running": ffmpeg_install_running(),
+            "ffmpeg_install_error": ffmpeg_install_error(),
+            "calendar_event_days": len(events),
+            "calendar_event_count": sum(len(v) for v in events.values()),
             "state": {k: v for k, v in self.state.items() if k != "log"},
             "log": self.state.get("log", [])[-50:],
         }
@@ -348,6 +361,26 @@ class App:
 
 def region_net_proxy(cfg: dict) -> str:
     return str((cfg.get("network") or {}).get("proxy") or "").strip()
+
+
+def ref_image_paths(limit: int = 4) -> list[Path]:
+    """参考图列表(按文件名排序, 截上限): 角色立绘/风格样例, 随生图请求上传。"""
+    d = config.ref_images_dir()
+    if not d.exists():
+        return []
+    return sorted((p for p in d.iterdir()
+                   if p.is_file() and p.suffix.lower() in config.WALLPAPER_EXTS),
+                  key=lambda p: p.name)[:limit]
+
+
+def ffmpeg_install_running() -> bool:
+    from . import server
+    return bool(server._FFMPEG_INSTALL["running"])
+
+
+def ffmpeg_install_error() -> str | None:
+    from . import server
+    return server._FFMPEG_INSTALL["error"]
 
 
 def is_network_error(msg: str) -> bool:

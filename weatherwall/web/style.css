@@ -120,3 +120,4 @@ textarea{resize:vertical;min-height:96px}
   display:flex;align-items:safe center;justify-content:safe center;z-index:20;padding:20px;overflow:auto}
 .modal-box{animation:pop .18s ease-out}
 @keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.calgrid .cg .evt{color:#ffa640;font-weight:600}
