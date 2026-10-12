@@ -66,14 +66,14 @@ def normalize_stem(name: str, fallback: str = "base") -> str:
     return re.sub(r"_+", "_", "_".join(tokens)).strip("_") or fallback
 
 # 默认 Prompt(英文)。中文用户可自行在设置页改为中文模板。
-# {daypart_name}/{time} 让生图模型明确昼夜: 夜里出夜景, 傍晚出暮色。
+# {period_name} 让生图模型明确昼夜: 夜里出夜景, 傍晚出暮色。
 # 时段指令为强制项: 即使参考照片是白天, 也必须按所述时间重绘光照与天空。
 DEFAULT_PROMPT = (
     "Based on this reference photo, create a stunning desktop wallpaper: "
     "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
     "solar term {solarterm_name}. "
-    "TIME OF DAY IS MANDATORY: it is currently {daypart_name} (local time {time}, "
-    "daytime segment {hours}). Even if the reference photo shows different lighting, "
+    "TIME OF DAY IS MANDATORY: it is currently {period_name} (local time {time}). "
+    "Even if the reference photo shows different lighting, "
     "you must repaint the lighting and sky to match — "
     "at night: a dark night sky with the moon or stars and dim ambient light; "
     "at dawn or dusk: a warm low-sun glow; by day: sun consistent with the weather. "
@@ -125,7 +125,21 @@ LEGACY_PROMPT_EN_V3 = (
     "and by day the sun in a position consistent with the weather. "
     "Photorealistic, rich details, no text or watermark."
 )
-LEGACY_PROMPTS = (LEGACY_PROMPT_ZH, LEGACY_PROMPT_EN_V1, LEGACY_PROMPT_EN_V2, LEGACY_PROMPT_EN_V3)
+LEGACY_PROMPT_EN_V4 = (
+    "Based on this reference photo, create a stunning desktop wallpaper: "
+    "weather {weather_name}, temperature around {temp}°C ({temp_min}~{temp_max}°C), "
+    "solar term {solarterm_name}. "
+    "TIME OF DAY IS MANDATORY: it is currently {daypart_name} (local time {time}, "
+    "daytime segment {hours}). Even if the reference photo shows different lighting, "
+    "you must repaint the lighting and sky to match — "
+    "at night: a dark night sky with the moon or stars and dim ambient light; "
+    "at dawn or dusk: a warm low-sun glow; by day: sun consistent with the weather. "
+    "Preserve the original composition and main subject, "
+    "naturally blending in the weather and seasonal atmosphere. "
+    "Photorealistic, rich details, no text or watermark."
+)
+LEGACY_PROMPTS = (LEGACY_PROMPT_ZH, LEGACY_PROMPT_EN_V1, LEGACY_PROMPT_EN_V2,
+                  LEGACY_PROMPT_EN_V3, LEGACY_PROMPT_EN_V4)
 
 DEFAULT_CONFIG = {
     # auto: 初始化时探测(google 通->global, 不通->china)，可手动覆盖
@@ -149,7 +163,15 @@ DEFAULT_CONFIG = {
     "naming": {
         "temp_mode": "band",     # band: 温度按区间量化(如 20-25) | minmax: 当日最低-最高(如 12-23)
         "temp_band": 5,
-        "time_bucket_hours": 4,  # 时段桶大小(小时)，生成 hours 标签如 1216
+        "time_bucket_hours": 4,  # (旧) 数值时段桶, 仅保留兼容旧配置; 缓存键已改用时段词
+        # AI 图缓存键构成: 勾选的元素变化才重新生图; 日期默认不参与(只影响日历挂件重合成)
+        "cache_key": {
+            "weather": True,
+            "period": True,      # 时段词: morning/forenoon/noon/afternoon/dusk/evening/latenight
+            "temp": False,
+            "solarterm": True,
+            "date": False,
+        },
     },
     "generator": {
         "base_url": "https://api.openai.com/v1",  # 任意 OpenAI 兼容生图服务
@@ -175,10 +197,10 @@ DEFAULT_CONFIG = {
             "{weather_icon} {solarterm_icon}",
             "{city}",
             "{weather_name} · {temp}°C ({temp_min}~{temp_max}°C)",
-            "{solarterm_name} · {time}",
+            "{solarterm_name} · {period}",
         ],
     },
-    # 日历挂件: 月历合成到壁纸上(与信息挂件同款样式引擎), 今日红心标注
+    # 日历挂件: 月历合成到壁纸上(与信息挂件同款样式引擎), 今日红色高亮
     "widget_calendar": {
         "enabled": False,
         "style": "glass",         # glass / card / minimal / banner

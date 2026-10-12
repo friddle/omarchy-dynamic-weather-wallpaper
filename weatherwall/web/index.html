@@ -5,125 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dynamic Weather Wallpaper</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
-<style>
-:root{
-  --bg:#0f1117;--panel:#171a23;--panel2:#1e222e;--line:#2a2f3d;
-  --text:#e8eaf0;--muted:#8b93a7;--accent:#5b8cff;--accent2:#7c5bff;
-  --ok:#3ecf8e;--warn:#f5b14c;--err:#ff6b6b;--radius:14px;
-}
-*{box-sizing:border-box}
-body{margin:0;background:linear-gradient(160deg,var(--bg),#131722 60%,#10131c);
-  color:var(--text);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
-.wrap{max-width:960px;margin:0 auto;padding:24px 20px 80px}
-h1{font-size:21px;margin:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
-.sub{color:var(--muted);margin:4px 0 0;font-size:13px}
-.lang-switch{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.lang-switch button{background:transparent;border:0;color:var(--muted);padding:2px 8px;font-size:11px;line-height:1.4;cursor:pointer}
-.lang-switch button.on{background:var(--accent);color:#fff}
-/* Tabs */
-.tabs{display:flex;gap:6px;margin:20px 0 16px;background:var(--panel);border:1px solid var(--line);
-  border-radius:12px;padding:6px}
-.tabs button{flex:1;background:transparent;border:0;color:var(--muted);padding:9px 6px;border-radius:9px;
-  font:inherit;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;
-  transition:.15s;white-space:nowrap}
-.tabs button:hover{color:var(--text)}
-.tabs button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
-.tabs button .ic{font-size:15px}
-/* Cards & blocks */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
-  padding:18px 20px;margin-bottom:14px}
-.card h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
-.card .desc{color:var(--muted);font-size:12.5px;margin:0 0 14px}
-.stephead{display:flex;gap:12px;align-items:flex-start;margin-bottom:4px}
-.stepnum{flex-shrink:0;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:13px;margin-top:1px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
-label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
-input[type=text],input[type=number],input[type=password],select,textarea{
-  width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
-  border-radius:8px;padding:8px 10px;font:inherit;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent)}
-textarea{resize:vertical;min-height:96px}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:0;
-  border-radius:8px;padding:8px 16px;font:inherit;cursor:pointer;transition:.15s}
-.btn:hover{filter:brightness(1.12)}
-.btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--text)}
-.btn.small{padding:5px 12px;font-size:12.5px}
-.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
-.kv:last-child{border-bottom:0}
-.kv .k{color:var(--muted);flex-shrink:0}
-.kv .v{text-align:right;word-break:break-all}
-.badge{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;background:var(--panel2);border:1px solid var(--line)}
-.badge.ok{color:var(--ok);border-color:var(--ok)}
-.badge.err{color:var(--err);border-color:var(--err)}
-.badge.warn{color:var(--warn);border-color:var(--warn)}
-#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
-  background:#20242f;border:1px solid var(--line);color:var(--text);padding:10px 20px;
-  border-radius:10px;transition:.25s;opacity:0;z-index:9;max-width:86vw}
-#toast.show{transform:translateX(-50%) translateY(0);opacity:1}
-#toast.err{border-color:var(--err)}
-.preview-name{font-family:ui-monospace,Menlo,monospace;background:var(--panel2);border:1px solid var(--line);
-  border-radius:8px;padding:8px 10px;word-break:break-all;font-size:13px}
-.hint{font-size:12px;color:var(--muted);margin-top:6px}
-.hint code{background:var(--panel2);padding:1px 6px;border-radius:5px}
-.dropzone{border:1.5px dashed var(--line);border-radius:10px;padding:20px;text-align:center;color:var(--muted);
-  cursor:pointer;transition:.15s}
-.dropzone:hover,.dropzone.drag{border-color:var(--accent);color:var(--text)}
-.base-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-.base-item{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2);position:relative}
-.base-item img{width:100%;height:90px;object-fit:cover;display:block;cursor:pointer}
-.base-item .nm{font-size:11px;padding:5px 8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.base-item.active{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
-.base-item .mark{position:absolute;top:6px;left:6px;background:var(--ok);color:#04150c;font-size:10px;
-  padding:1px 7px;border-radius:10px;font-weight:600}
-.base-item .ops{position:absolute;top:6px;right:6px;display:flex;gap:5px}
-.base-item .op{background:rgba(15,17,23,.72);border:1px solid var(--line);color:var(--text);
-  width:24px;height:24px;border-radius:7px;cursor:pointer;font-size:12px;line-height:1}
-.base-item .op:hover{border-color:var(--accent)}
-.wall-groups{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.chip{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:20px;
-  padding:4px 14px;font:inherit;font-size:12.5px;cursor:pointer}
-.chip:hover{color:var(--text)}
-.chip.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
-.wall-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-.wall-item{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel2)}
-.wall-item img{width:100%;height:100px;object-fit:cover;display:block;cursor:pointer}
-.wall-item .nm{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;padding:5px 8px;color:var(--muted);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.logbox{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
-  max-height:230px;overflow:auto;font:11.5px/1.7 ui-monospace,Menlo,monospace;color:#9fa8bd;white-space:pre-wrap}
-/* widget tab */
-.wg-preview{position:relative;aspect-ratio:16/9;border:1px solid var(--line);border-radius:10px;overflow:hidden;
-  background:#0b0d13 center/cover no-repeat;touch-action:none}
-.wg-drag{position:absolute;max-width:70%;padding:.75em 1em;border-radius:.9em;cursor:grab;user-select:none;
-  font-size:clamp(11px,1.9vw,15px);line-height:1.5;color:#fff;background:rgba(10,12,18,var(--wgo,.55));
-  border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);white-space:nowrap;
-  transform:translate(-50%,-50%)}
-.wg-drag:active{cursor:grabbing}
-.wg-drag .t{font-size:1.45em;font-weight:600}
-.wg-drag.wgstyle-card{backdrop-filter:none}
-.wg-drag.wgstyle-minimal{background:transparent;border:0;backdrop-filter:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.wg-drag.wgstyle-banner{left:0!important;top:auto!important;bottom:0;max-width:100%;width:100%;
-  border-radius:0;border:0;border-top:1px solid rgba(255,255,255,.25);cursor:default;transform:none}
-.wg-drag.calgrid{white-space:normal;max-width:88%}
-.calgrid .cg{display:grid;grid-template-columns:repeat(7,1.7em);text-align:center;margin-top:.3em}
-.calgrid .cg .hd{color:rgba(255,255,255,.75);font-size:.82em}
-.calgrid .cg .we{color:rgba(255,255,255,.62)}
-.calgrid .cg .today{color:#ff4d5e;font-weight:700}
-.wg-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.wg-row input{flex:1}
-.wg-row .op{width:28px;height:28px;flex:0 0 28px;border-radius:7px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--text);cursor:pointer;font-size:12px;line-height:1}
-.wg-row .op:hover{border-color:var(--accent)}
-.footer{color:var(--muted);font-size:12px;text-align:center;margin-top:10px}
-.hidden{display:none!important}
-.modal{position:fixed;inset:0;background:rgba(6,8,12,.66);backdrop-filter:blur(3px);
-  display:flex;align-items:center;justify-content:center;z-index:20;padding:20px}
-.modal-box{animation:pop .18s ease-out}
-@keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="wrap">
@@ -330,7 +212,7 @@ textarea{resize:vertical;min-height:96px}
     <div class="card">
       <div class="stephead"><div class="stepnum">4</div><div>
         <h2 data-i18n="sch_title">Schedule &amp; Naming</h2>
-        <p class="desc" data-i18n="sch_desc">Wallpaper filename pattern: base_weather_hours_temperature_solarterm.jpg. Generated results are cached and reused until any condition changes.</p>
+        <p class="desc" data-i18n="sch_desc">Wallpaper filename pattern: base_weather_period_solarterm.jpg. Generated results are cached and reused until any checked condition changes.</p>
       </div></div>
       <div class="grid">
         <div>
@@ -344,11 +226,26 @@ textarea{resize:vertical;min-height:96px}
             <option value="minmax" data-i18n="sch_minmax">minmax · daily min-max (e.g. 12-23)</option>
           </select>
         </div>
-        <div>
-          <label data-i18n="sch_bucket">Time bucket size (hours)</label>
-          <input type="number" id="cfg-bucket" min="1" max="24">
-        </div>
       </div>
+      <label style="margin-top:14px" data-i18n="sch_cachekey">Cache key elements (AI regenerates only when a checked element changes)</label>
+      <div class="row" style="gap:16px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ck-weather" style="width:auto">
+          <span style="color:var(--text);font-size:13px" data-i18n="ck_weather">Weather</span></label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ck-period" style="width:auto" checked>
+          <span style="color:var(--text);font-size:13px" data-i18n="ck_period">Day period</span></label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ck-solarterm" style="width:auto" checked>
+          <span style="color:var(--text);font-size:13px" data-i18n="ck_solarterm">Solar term</span></label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ck-temp" style="width:auto">
+          <span style="color:var(--text);font-size:13px" data-i18n="ck_temp">Temperature</span></label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin:0">
+          <input type="checkbox" id="ck-date" style="width:auto">
+          <span style="color:var(--text);font-size:13px" data-i18n="ck_date">Date</span></label>
+      </div>
+      <div class="hint" data-i18n="sch_cachekey_hint">Unchecked elements never trigger a new AI image. The calendar widget always re-renders on date change using the cached AI image — no regeneration.</div>
       <div class="row" style="margin-top:14px">
         <button class="btn" id="btn-save-sch" data-i18n="save">Save</button>
       </div>
@@ -377,6 +274,16 @@ textarea{resize:vertical;min-height:96px}
   <!-- ============ Tab 4: Widget ============ -->
   <section id="tab-widget" class="hidden">
     <div class="card">
+      <h2 data-i18n="wgs_title">Widgets Preview</h2>
+      <p class="desc" data-i18n="wgs_desc">The info widget and the calendar are composited onto the same wallpaper. Drag either box to set its position.</p>
+      <div class="wg-preview" id="wg-preview">
+        <div class="wg-drag" id="wg-drag"></div>
+        <div class="wg-drag calgrid" id="cal-drag"></div>
+      </div>
+      <div class="hint" data-i18n="wgs_hint">Drag either widget inside the preview to set its position; banner style is pinned to the bottom. Click ⤢ on a widget to enlarge.</div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
       <h2 data-i18n="wg_title">Wallpaper Info Widget</h2>
       <p class="desc" data-i18n="wg_desc">Composite weather/temperature fields onto the wallpaper before it is applied. Rendered with ffmpeg (preinstalled on Omarchy).</p>
       <div class="row" style="margin-bottom:14px">
@@ -405,11 +312,6 @@ textarea{resize:vertical;min-height:96px}
           <input type="range" id="wg-scale" min="20" max="200" step="5" style="width:100%">
         </div>
       </div>
-      <label style="margin-top:14px" data-i18n="wg_preview">Preview (drag the widget to set position)</label>
-      <div class="wg-preview" id="wg-preview">
-        <div class="wg-drag" id="wg-drag"></div>
-      </div>
-      <div class="hint" id="wg-pos-hint" data-i18n="wg_drag_hint">Drag the widget inside the preview; banner style is pinned to the bottom.</div>
       <label style="margin-top:14px" data-i18n="wg_fields">Field lines (edit / replace / reorder / add your own)</label>
       <div id="wg-fields"></div>
       <div class="row" style="margin-top:6px">
@@ -449,11 +351,6 @@ textarea{resize:vertical;min-height:96px}
           <input type="range" id="cal-scale" min="20" max="200" step="5" style="width:100%">
         </div>
       </div>
-      <label style="margin-top:14px" data-i18n="cal_preview">Preview (drag the calendar to set position)</label>
-      <div class="wg-preview" id="cal-preview">
-        <div class="wg-drag calgrid" id="cal-drag"></div>
-      </div>
-      <div class="hint" id="cal-pos-hint" data-i18n="cal_drag_hint">Drag the calendar inside the preview; banner style is pinned to the bottom.</div>
       <div class="row" style="margin-top:14px">
         <button class="btn" id="btn-save-calendar" data-i18n="save">Save</button>
       </div>
@@ -491,682 +388,22 @@ textarea{resize:vertical;min-height:96px}
   </div>
 </div>
 
+<!-- 挂件放大预览弹窗 -->
+<div id="modal-wgview" class="modal hidden">
+  <div class="modal-box">
+    <div class="wg-preview wg-preview-big" id="wg-preview-big">
+      <div class="wg-drag" id="wg-drag-big"></div>
+      <div class="wg-drag calgrid" id="cal-drag-big"></div>
+    </div>
+    <div class="row" style="margin-top:12px;justify-content:center">
+      <button class="btn ghost" id="wgview-close" data-i18n="wg_close">Collapse</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
-<script>
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-/* ---------------- i18n ---------------- */
-const I18N={
-en:{
- title:"Dynamic Weather Wallpaper",subtitle:"A desktop plugin that keeps generating fresh dynamic wallpapers from your personal environment",
- tab_status:"Status",tab_base:"Base & AI",tab_adv:"Advanced",tab_gallery:"Gallery",tab_widget:"Widget",
- wg_title:"Wallpaper Info Widget",
- wg_desc:"Composite weather/temperature fields onto the wallpaper before it is applied. Rendered with ffmpeg (preinstalled on Omarchy).",
- wg_enable:"Enable widget",wg_style:"Style",
- style_glass:"Glass (frosted blur)",style_card:"Card",style_minimal:"Minimal (shadowed text)",style_banner:"Bottom banner",
- wg_opacity:"Background opacity",wg_scale:"Font scale",
- wg_preview:"Preview (drag the widget to set position)",
- wg_drag_hint:"Drag the widget inside the preview to set its position; banner style is pinned to the bottom.",
- wg_fields:"Field lines (edit / replace / reorder / add your own)",wg_add:"Add line",
- wg_ph_hint:"Variables — weather: {weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} · solar term: {solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm} · time: {time} {date} · place: {city}. Free text allowed. Icons need a symbol font (Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols).",
- wg_need_ffmpeg:"ffmpeg not found — widget disabled",
- cal_title:"Calendar Widget",
- cal_desc:"Composite a month calendar onto the wallpaper — on the left by default (info widget stays on the right). Today is marked with a red heart.",
- cal_enable:"Enable calendar",cal_scale:"Calendar scale",
- cal_preview:"Preview (drag the calendar to set position)",
- cal_drag_hint:"Drag the calendar inside the preview to set its position; banner style is pinned to the bottom.",
- run_status:"Run Status",st_platform:"Platform / Version",st_region:"Network Channel",
- st_weather:"Weather",st_tags:"Tags (weather / hours / temp / solar term)",st_file:"Target File",
- st_misc:"Base Image / API Key",
- act_refresh:"Refresh Now",act_force:"Force Regenerate",act_detect:"Detect Channel",act_test:"Test Weather",
- base_title:"Base Image",base_desc:"The reference photo AI builds upon. Its filename becomes the prefix of generated wallpapers. Click a photo to make it active, right-click to delete.",
- base_drop:"Click or drag an image here (jpg / png / webp, ≤30MB)",
- base_hint:"e.g. westlake.jpg → westlake_rain_1216_20-25_springbegin.jpg",
- genb_open:"Auto-generate Base Image",genb_hint:"Describe a scene, let AI create a base image for you",
- genb_title:"Auto-generate Base Image",
- genb_desc:"Describe the scene — AI creates a new base image (text-to-image) and sets it active. Requires the API key configured in AI section.",
- genb_prompt:"Scene description (prompt)",genb_name:"Filename (optional)",genb_name_ph:"e.g. island → island.jpg",
- genb_go:"Generate",cancel:"Cancel",
- genb_running:"Generating, please wait…",genb_ok:"Base image generated and set active: ",
- ai_title:"AI Image Generation",ai_desc:"Any OpenAI-compatible images API. With a base image it calls images/edits (image-to-image); without one it calls images/generations.",
- ai_baseurl:"API Base URL (remote server)",ai_key:"API Key",ai_model:"Model",ai_size:"Size",ai_prompt:"Prompt Template",
- ai_ph:"Placeholders: {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} — English template recommended; Chinese works too.",
- ai_size_hint:"auto = your display's resolution; or any WxH your API supports.",
- ai_model_hint:"Candidates load from your API once Base URL & Key are set; free text allowed.",
- ai_nofallback:"Without an API key the base image is used directly (fallback mode).",
- net_title:"Network Channel",net_desc:"Determines the default weather services. With auto, connectivity is checked at startup: international services are used when reachable, otherwise China-direct services.",
- net_region:"Channel",net_auto:"auto · Detect automatically",
- net_proxy:"HTTP Proxy (optional)",net_proxy_ph:"e.g. http://host:port — leave empty for direct connection",
- w_title:"Weather Source & City",w_desc:"Built-in sources are free. QWeather and OpenWeatherMap require a free API key (shown only when selected).",
- w_provider:"Weather API",w_country:"Country",w_china:"China",w_us:"United States",w_other:"Other / custom",
- w_city:"City",w_city_ph:"Enter a city name",w_locate:"📍 Locate by IP",
- w_apikey:"Weather API Key",w_apihost:"QWeather API Host (new accounts only)",
- w_lat:"Latitude (optional override)",w_lon:"Longitude (optional override)",
- sch_title:"Schedule & Naming",sch_desc:"Wallpaper filename pattern: base_weather_hours_temperature_solarterm.jpg. Generated results are cached and reused until any condition changes.",
- sch_refresh:"Refresh interval (minutes)",sch_temp:"Temperature tag",
- sch_band:"band · quantized range (e.g. 20-25)",sch_minmax:"minmax · daily min-max (e.g. 12-23)",
- sch_bucket:"Time bucket size (hours)",
- lang_title:"Language",lang_desc:"Interface language, also used by the {weather_name} and {solarterm_name} prompt placeholders.",lang_label:"Display language",
- gal_title:"Wallpaper Gallery",gal_desc:"Click an image to apply it instantly.",
- disp_title:"Target Displays",disp_desc:"Select which displays the wallpaper applies to.",
- disp_load:"Refresh Display List",disp_empty:"Click refresh to load displays",
- disp_all:"All displays",disp_count:" displays",disp_saved:"Display settings saved",
- save:"Save",
- t_key_required:"API Key is required before saving",rename:"Rename",del:"Delete",rename_prompt:"New name (Chinese will be converted to pinyin):",del_confirm:"Delete",t_saved:"Saved",t_gen_q:"Generating in the background — check the Status tab shortly",t_gen_ok:"Done",
- t_located:"Located: ",t_locate_fail:"Locate failed: ",t_no_base:"No base images yet — upload one first",
- t_no_walls:"No wallpapers yet — click Refresh Now",t_cache_hit:"cache hit",t_new:"new",t_confirm_force:"Regenerate the current wallpaper via AI? The cached image will be replaced.",
- t_apply_ok:"Applied: ",t_detect_none:"network unreachable",
- kw_none:"none",kw_auto:"auto → ",kw_detected:"detected",kw_cached:"cache hit",kw_new:"generated",kw_err:"last error",
- kw_degraded:"AI fallback (see log)",
- key_howto_q:"Get a key: open <b>console.qweather.com</b> → sign up → Console → Projects → create project & credential → copy the Key. New accounts also get a dedicated <b>API Host</b> (abcxxx.re.qweatherapi.com) to fill in above. Free tier: 1000 calls/day.",
- key_howto_o:"Get a key: open <b>home.openweathermap.org</b> → sign up → \"API keys\" page → copy (activates in ~10 min). Free tier: 60 calls/min.",
- key_howto_free:"Keyless source selected — no key needed.",
- kw_base:"base",no_key:"no key (fallback)",
-},
-zh:{
- title:"动态天气壁纸",subtitle:"针对个人用户的环境不停生成新的动态壁纸的桌面插件",
- tab_status:"运行状态",tab_base:"基准图与 AI",tab_adv:"详细配置",tab_gallery:"壁纸库",tab_widget:"挂件",
- wg_title:"壁纸信息挂件",
- wg_desc:"应用壁纸前，把天气/温度等字段合成到图上。使用 ffmpeg 渲染(Omarchy 一般自带)。",
- wg_enable:"启用挂件",wg_style:"样式",
- style_glass:"毛玻璃",style_card:"卡片",style_minimal:"极简(阴影字)",style_banner:"底部横幅",
- wg_opacity:"背景不透明度",wg_scale:"字号缩放",
- wg_preview:"预览(拖动挂件设置位置)",
- wg_drag_hint:"在预览图中拖动挂件设置位置；横幅样式固定底部。",
- wg_fields:"字段行(可编辑 / 替换 / 排序 / 添加自定义话语)",wg_add:"添加一行",
- wg_ph_hint:"可用变量 —— 天气：{weather_icon} {weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours}；节气：{solarterm_icon} {solarterm_name} {solarterm_en} {solarterm_cn} {solarterm}；时间：{time} {date}；地点：{city}。其余文字原样显示，可自由添加话语。图标需系统有符号字体(Noto Sans Symbols2 / Segoe UI Symbol / Apple Symbols)。",
- wg_need_ffmpeg:"未找到 ffmpeg，挂件不可用",
- cal_title:"日历挂件",
- cal_desc:"在壁纸上合成月历——默认居左(信息挂件保持居右)，今天的日期用红心标出。",
- cal_enable:"启用日历",cal_scale:"日历缩放",
- cal_preview:"预览(拖动日历设置位置)",
- cal_drag_hint:"在预览图中拖动日历设置位置；横幅样式固定底部。",
- run_status:"运行状态",st_platform:"平台 / 版本",st_region:"网络通道",
- st_weather:"天气",st_tags:"标签 (天气 / 时段 / 温度 / 节气)",st_file:"目标文件",
- st_misc:"基准图 / API Key",
- act_refresh:"立即刷新",act_force:"强制重新生图",act_detect:"探测通道",act_test:"测试天气",
- base_title:"基准图",base_desc:"AI 生图的底图，文件名即生成壁纸名前缀。点击切换生效，右键删除。",
- base_drop:"点击或拖拽图片到此处上传 (jpg / png / webp，≤30MB)",
- base_hint:"如 westlake.jpg → westlake_rain_1216_20-25_springbegin.jpg",
- genb_open:"自动生成基准图",genb_hint:"描述一个场景，让 AI 帮你生成基准图",
- genb_title:"自动生成基准图",
- genb_desc:"描述场景，AI 通过文生图创建一张新基准图并设为生效。需要先在 AI 配置里填好 API Key。",
- genb_prompt:"场景描述 (prompt)",genb_name:"文件名 (可选)",genb_name_ph:"如 island → island.jpg",
- genb_go:"生成",cancel:"取消",
- genb_running:"正在生成，请稍候…",genb_ok:"基准图已生成并生效：",
- ai_title:"AI 生图",ai_desc:"任意 OpenAI 兼容 images 接口。有基准图走 images/edits(图生图)，无基准图走 images/generations。",
- ai_baseurl:"API Base URL (远程服务器)",ai_key:"API Key",ai_model:"模型",ai_size:"尺寸",ai_prompt:"Prompt 模板",
- ai_ph:"占位符：{weather_name} {weather_en} {weather_cn} {weather} {temp} {temp_min} {temp_max} {hours} {solarterm_name} {solarterm} {city} —— 推荐英文模板，中文亦可。",
- ai_nofallback:"未配置 API Key 时直接使用基准图(降级模式)。",
- ai_size_hint:"auto = 当前显示器分辨率；也可输入接口支持的任意 宽x高。",
- ai_model_hint:"配置好 Base URL 与 Key 后自动加载模型候选，也可自由输入。",
- net_title:"网络通道",net_desc:"决定默认使用的天气服务。选择 auto 时，启动阶段会自动检测网络连通性：可访问国际网络时使用国外服务，否则使用国内服务。",
- net_region:"通道",net_auto:"auto · 自动检测",
- net_proxy:"HTTP 代理（可选）",net_proxy_ph:"例如 http://host:port，留空则直连",
- w_title:"天气源与城市",w_desc:"内置天气源均免费；和风天气与 OpenWeatherMap 需要免费 API Key（选中后才显示填写框）。",
- w_provider:"天气接口",w_country:"国家",w_china:"中国",w_us:"美国",w_other:"其他 / 自定义",
- w_city:"城市",w_city_ph:"输入城市名称",w_locate:"📍 IP 自动定位",
- w_apikey:"天气 API Key",w_apihost:"和风天气 API Host (仅新账号)",
- w_lat:"纬度 (可选，直接覆盖)",w_lon:"经度 (可选，直接覆盖)",
- sch_title:"刷新与命名",sch_desc:"壁纸文件名规则：基准图_天气_时段_温度_节气.jpg。生成结果会被缓存，条件不变时直接复用。",
- sch_refresh:"刷新间隔 (分钟)",sch_temp:"温度标签",
- sch_band:"band · 区间量化 (如 20-25)",sch_minmax:"minmax · 当日最低-最高 (如 12-23)",
- sch_bucket:"时段桶大小 (小时)",
- lang_title:"语言",lang_desc:"界面语言，同时决定 {weather_name} 与 {solarterm_name} 占位符的输出语言。",lang_label:"显示语言",
- gal_title:"壁纸库",gal_desc:"点击图片立即应用。",
- disp_title:"目标显示器",disp_desc:"选择壁纸应用的显示器。",
- disp_load:"刷新显示器列表",disp_empty:"点击刷新加载显示器",
- disp_all:"全部显示器",disp_count:" 块",disp_saved:"显示器设置已保存",
- save:"保存",
- t_key_required:"请先填写 API Key 再保存",rename:"重命名",del:"删除",rename_prompt:"新名称（中文自动转拼音）：",del_confirm:"删除",t_saved:"已保存",t_gen_q:"正在后台生成，稍后可在状态页查看",t_gen_ok:"完成",
- t_located:"定位到：",t_locate_fail:"定位失败：",t_no_base:"还没有基准图，先上传一张",
- t_no_walls:"还没有壁纸，点「立即刷新」生成",t_cache_hit:"缓存命中",t_new:"新生成",t_confirm_force:"确定重新生成当前壁纸？将调用 AI 并替换缓存图片。",
- t_apply_ok:"已应用：",t_detect_none:"网络不可用",
- kw_none:"无",kw_auto:"auto → ",kw_detected:"探测",kw_cached:"缓存命中",kw_new:"新生成",kw_err:"最近错误",
- kw_degraded:"生图降级 (见日志)",
- key_howto_q:"获取 Key：打开 <b>console.qweather.com</b> → 注册登录 → 控制台「项目管理」创建项目并生成凭据 → 复制 Key；新账号会分配专属 <b>API Host</b>(abcxxx.re.qweatherapi.com)，填到上方输入框。免费订阅每天 1000 次。",
- key_howto_o:"获取 Key：打开 <b>home.openweathermap.org</b> → 注册 → 「API keys」页直接复制(约 10 分钟生效)。免费档 60 次/分钟。",
- key_howto_free:"当前为免 Key 源，无需填写。",
- kw_base:"基准图",no_key:"无 Key(降级)",
-}};
-/* 天气/节气展示名(状态页) */
-const WX_NAME={en:{sunny:"Sunny",partlycloudy:"Partly Cloudy",cloudy:"Cloudy",overcast:"Overcast",fog:"Fog",haze:"Haze",drizzle:"Drizzle",rain:"Rain",heavyrain:"Heavy Rain",snow:"Snow",thundershower:"Thunderstorm",wind:"Windy"},
-zh:{sunny:"晴",partlycloudy:"晴间多云",cloudy:"多云",overcast:"阴",fog:"雾",haze:"霾",drizzle:"小雨",rain:"雨",heavyrain:"大雨",snow:"雪",thundershower:"雷阵雨",wind:"大风"}};
-const ST_NAME={en:{minorcold:"Minor Cold",majorcold:"Major Cold",springbegin:"Start of Spring",rainwater:"Rain Water",insectsawaken:"Insects Awaken",springequinox:"Spring Equinox",clearandbright:"Pure Brightness",grainrain:"Grain Rain",summerbegin:"Start of Summer",grainbuds:"Grain Buds",graininear:"Grain in Ear",summersolstice:"Summer Solstice",minorheat:"Minor Heat",majorheat:"Major Heat",autumnbegin:"Start of Autumn",endofheat:"End of Heat",whitedew:"White Dew",autumnequinox:"Autumn Equinox",colddew:"Cold Dew",frostfall:"Frost's Descent",winterbegin:"Start of Winter",minorsnow:"Minor Snow",majorsnow:"Major Snow",wintersolstice:"Winter Solstice"},
-zh:{minorcold:"小寒",majorcold:"大寒",springbegin:"立春",rainwater:"雨水",insectsawaken:"惊蛰",springequinox:"春分",clearandbright:"清明",grainrain:"谷雨",summerbegin:"立夏",grainbuds:"小满",graininear:"芒种",summersolstice:"夏至",minorheat:"小暑",majorheat:"大暑",autumnbegin:"立秋",endofheat:"处暑",whitedew:"白露",autumnequinox:"秋分",colddew:"寒露",frostfall:"霜降",winterbegin:"立冬",minorsnow:"小雪",majorsnow:"大雪",wintersolstice:"冬至"}};
-/* 天气/节气图标(与后端 WEATHER_ICON/SOLARTERM_ICON 保持一致) */
-const WX_ICON={sunny:"☀",partlycloudy:"⛅",cloudy:"☁",overcast:"☁",fog:"☁",haze:"☁",drizzle:"☂",rain:"☂",heavyrain:"☔",snow:"❄",thundershower:"☈",wind:"☁"};
-const ST_ICON={minorcold:"❄",majorcold:"❄",springbegin:"⛅",rainwater:"☂",insectsawaken:"⚡",springequinox:"☼",clearandbright:"☼",grainrain:"☂",summerbegin:"☀",grainbuds:"☀",graininear:"☂",summersolstice:"☀",minorheat:"☀",majorheat:"☀",autumnbegin:"⛅",endofheat:"⛅",whitedew:"☁",autumnequinox:"☼",colddew:"☁",frostfall:"❄",winterbegin:"❄",minorsnow:"❄",majorsnow:"❄",wintersolstice:"❄"};
-
-let LANG='en';
-const t=k=>I18N[LANG][k]??I18N.en[k]??k;
-function applyI18n(){
-  document.documentElement.lang=LANG==='zh'?'zh-CN':'en';
-  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
-  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder=t(el.dataset.i18nPh));
-  $('lang-en').classList.toggle('on',LANG==='en');
-  $('lang-zh').classList.toggle('on',LANG==='zh');
-  updateKeyHowto();
-}
-
-/* ---------------- helpers ---------------- */
-function toast(msg,err){const tb=$('toast');tb.textContent=msg;tb.className='show'+(err?' err':'');
-  clearTimeout(tb._h);tb._h=setTimeout(()=>tb.className='',3200);}
-async function api(path,body){
-  const hs={'X-Token':(typeof APITOKEN!=='undefined')?APITOKEN:''};
-  const opt=body!==undefined?{method:'POST',headers:Object.assign(hs,{'Content-Type':'application/json'}),body:JSON.stringify(body)}:{headers:hs};
-  const r=await fetch(path,opt);const j=await r.json().catch(()=>({ok:false,error:'bad response'}));
-  if(!j.ok&&j.error)throw new Error(j.error);return j;}
-
-/* ---------------- tabs ---------------- */
-const TABS=['status','base','adv','widget','gallery'];
-TABS.forEach(name=>$('tabbtn-'+name).onclick=()=>{
-  TABS.forEach(n=>{$('tab-'+n).classList.toggle('hidden',n!==name);
-    $('tabbtn-'+n).classList.toggle('on',n===name);});
-  if(name==='gallery')loadWalls();
-  if(name==='adv'&&!DISPLAYS.length)loadDisplays();
-  if(name==='widget'){wgPreviewBg();wgRender();calPlace();calRender();}
-});
-
-/* ---------------- language ---------------- */
-function setLang(l,persist=true){LANG=l;applyI18n();renderStatus(ST_CACHE);renderBases(BASE_CACHE);renderWalls(WALL_CACHE);
-  wgRender();calRender();
-  if(persist)api('/api/config',{config:{ui:{language:l}}}).catch(()=>{});}
-$('lang-en').onclick=()=>setLang('en');
-$('lang-zh').onclick=()=>setLang('zh');
-$('cfg-lang').onchange=()=>setLang($('cfg-lang').value);
-
-/* ---------------- status ---------------- */
-let ST_CACHE=null;
-async function loadStatus(){
-  try{
-    const st=await api('/api/status');ST_CACHE=st;renderStatus(st);
-  }catch(e){toast(e.message,true)}
-}
-function renderStatus(st){
-  if(!st)return;
-  $('ver').textContent='v'+st.version+' · '+st.platform;
-  const lr=st.state.last_run;
-  $('last-run').textContent=lr?(''+lr).replace('T',' '):'—';
-  $('last-run').className='badge'+(lr?'':' warn');
-  const regionTxt=(st.region_setting==='auto'?t('kw_auto')+(st.region_detected||t('kw_detected')):st.region_setting)
-    +(st.proxy?' · proxy '+st.proxy:'');
-  $('st-region').innerHTML='<span class="badge">'+esc(regionTxt)+'</span>';
-  const w=st.state.last_weather;
-  const genErr=st.state.last_gen_error;
-  const genBadge=st.state.last_error
-    ?' <span class="badge err" title="'+esc(st.state.last_error)+'">'+t('kw_err')+'</span>'
-    :(genErr?' <span class="badge warn" title="'+esc(genErr)+'">'+t('kw_degraded')+'</span>':'');
-  $('st-weather').innerHTML=w
-    ?esc(`${w.city} · ${WX_NAME[LANG][w.tag]||w.desc} · ${w.temp_current}℃ (${w.temp_min}~${w.temp_max}℃) · ${w.provider}`)+genBadge
-    :'<span class="badge warn">—</span>';
-  const tg=st.state.last_tags;
-  $('st-tags').innerHTML=tg
-    ?esc(`${WX_NAME[LANG][tg.weather]||tg.weather} / ${tg.hours} / ${tg.temp}℃ / ${ST_NAME[LANG][tg.solarterm]||tg.solarterm}`)
-    :'—';
-  $('st-file').innerHTML=st.state.last_stem
-    ?`<span class="preview-name">${esc(st.state.last_stem)}.${esc((st.state.last_target||'.jpg').split('.').pop())}</span>
-      ${st.state.last_cached?' <span class="badge ok">'+t('kw_cached')+'</span>':' <span class="badge warn">'+t('kw_new')+'</span>'}`
-    :'—';
-  $('st-misc').innerHTML=(st.base_image_exists?`<span class="badge ok">${esc(st.base_image)}</span>`:'<span class="badge warn">—</span>')
-    +' '+(st.has_api_key?'<span class="badge ok">API Key ✓</span>':'<span class="badge warn">'+t('no_key')+'</span>');
-  $('log').textContent=(st.log||[]).join('\n');
-  const lb=$('log');lb.scrollTop=lb.scrollHeight;
-  $('wg-ffwarn').classList.toggle('hidden',!!st.widget_ready);
-  if(!$('tab-widget').classList.contains('hidden'))wgRender();
-}
-
-/* ---------------- base images ---------------- */
-let BASE_CACHE=null;
-async function loadBases(){BASE_CACHE=await api('/api/base-images');renderBases(BASE_CACHE);wgPreviewBg();}
-function renderBases(r){
-  if(!r)return;const el=$('base-list');
-  el.innerHTML=r.items.length?'':'<div class="hint" style="grid-column:1/-1">'+t('t_no_base')+'</div>';
-  for(const it of r.items){
-    const active=it.name===r.active;
-    const d=document.createElement('div');
-    d.className='base-item'+(active?' active':'');
-    d.innerHTML=`${active?'<span class="mark">✓</span>':''}
-      <span class="ops"><button class="op" data-act="rename" title="${t('rename')}">✏️</button>
-      <button class="op" data-act="del" title="${t('del')}">🗑</button></span>
-      <img src="/api/base-image-file?name=${encodeURIComponent(it.name)}" title="${LANG==='zh'?'点击设为生效':'click to activate'}">
-      <div class="nm">${esc(it.name)}</div>`;
-    d.querySelector('img').onclick=()=>selectBase(it.name);
-    d.querySelector('[data-act=rename]').onclick=e=>{e.stopPropagation();renameBase(it.name);};
-    d.querySelector('[data-act=del]').onclick=e=>{e.stopPropagation();if(confirm(t('del_confirm')+' '+it.name+' ?'))delBase(it.name);};
-    el.appendChild(d);
-  }
-}
-async function renameBase(name){
-  const cur=name.replace(/\.[^.]+$/,'');
-  const input=prompt(t('rename_prompt'),cur);
-  if(input===null)return;
-  try{const r=await api('/api/base-image-rename',{name:name,new_name:input});
-    toast(t('rename')+' -> '+r.name);loadBases();loadStatus();loadWalls();
-  }catch(e){toast(e.message,true)}
-}
-async function selectBase(name){try{await api('/api/base-image-select',{name});toast((LANG==='zh'?'已生效: ':'Active: ')+name);loadBases();loadStatus();}catch(e){toast(e.message,true)}}
-async function delBase(name){try{await api('/api/base-image-delete',{name});toast(LANG==='zh'?'已删除':'Deleted');loadBases();loadStatus();}catch(e){toast(e.message,true)}}
-async function uploadBase(file){
-  if(!file)return;
-  if(file.size>30*1024*1024)return toast('>30MB',true);
-  const buf=await file.arrayBuffer();
-  let bin='';const bytes=new Uint8Array(buf);const chunk=0x8000;
-  for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
-  try{const r=await api('/api/base-image',{name:file.name,data_b64:btoa(bin)});
-    toast((LANG==='zh'?'上传成功: ':'Uploaded: ')+r.name);loadBases();loadStatus();
-  }catch(e){toast(e.message,true)}
-}
-$('drop').onclick=()=>$('file').click();
-$('file').onchange=e=>{uploadBase(e.target.files[0]);e.target.value='';};
-$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('drag')};
-$('drop').ondragleave=()=>$('drop').classList.remove('drag');
-$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('drag');uploadBase(e.dataTransfer.files[0])};
-
-/* ---------------- 自动生成基准图弹窗 ---------------- */
-let DEFAULT_BASE_PROMPT='';
-$('btn-gen-base').onclick=()=>{
-  $('genb-prompt').value=$('genb-prompt').value.trim()||DEFAULT_BASE_PROMPT;
-  $('genb-status').textContent='';
-  $('genb-go').disabled=false;
-  $('modal-gen').classList.remove('hidden');
-};
-$('genb-cancel').onclick=()=>$('modal-gen').classList.add('hidden');
-$('modal-gen').onclick=e=>{if(e.target.id==='modal-gen')$('modal-gen').classList.add('hidden');};
-$('genb-go').onclick=async()=>{
-  const btn=$('genb-go');btn.disabled=true;
-  $('genb-status').textContent=t('genb_running');
-  try{
-    const r=await api('/api/base-image-generate',{prompt:$('genb-prompt').value.trim(),name:$('genb-name').value.trim()});
-    toast(t('genb_ok')+r.name);
-    $('modal-gen').classList.add('hidden');
-    $('genb-name').value='';
-    loadBases();loadStatus();
-  }catch(e){toast(e.message,true);$('genb-status').textContent='';}
-  btn.disabled=false;
-};
-
-/* ---------------- gallery (two-level: base → generated) ---------------- */
-let WALL_CACHE=null,WALL_GROUP=null;
-async function loadWalls(){WALL_CACHE=await api('/api/wallpapers');renderWalls(WALL_CACHE);wgPreviewBg();}
-function renderWalls(r){
-  if(!r)return;
-  const groups=r.groups||[],el=$('wall-list'),chips=$('wall-groups');
-  chips.innerHTML='';
-  if(!groups.length){el.innerHTML='<div class="hint" style="grid-column:1/-1">'+t('t_no_walls')+'</div>';return;}
-  if(!WALL_GROUP||!groups.some(g=>g.base===WALL_GROUP))WALL_GROUP=groups[0].base;
-  for(const g of groups){
-    const c=document.createElement('button');
-    c.className='chip'+(g.base===WALL_GROUP?' on':'');
-    c.textContent=`${g.base} (${g.count})`;
-    c.onclick=()=>{WALL_GROUP=g.base;renderWalls(WALL_CACHE);};
-    chips.appendChild(c);
-  }
-  const g=groups.find(x=>x.base===WALL_GROUP);
-  el.innerHTML='';
-  for(const it of g.items.slice(0,60)){
-    const d=document.createElement('div');
-    d.className='wall-item';
-    const fname=it.name.split('/').pop();
-    d.innerHTML=`<img src="/api/wallpaper-file?name=${encodeURIComponent(it.name)}" title="${LANG==='zh'?'点击应用':'click to apply'}">
-      <div class="nm" title="${esc(fname)}">${esc(fname)}</div>`;
-    d.querySelector('img').onclick=async()=>{try{await api('/api/apply',{file:it.name});toast(t('t_apply_ok')+fname)}catch(e){toast(e.message,true)}};
-    el.appendChild(d);
-  }
-}
-
-/* ---------------- displays ---------------- */
-let DISPLAYS=[];
-async function loadDisplays(){
-  try{
-    const r=await api('/api/displays');
-    DISPLAYS=r.displays||[];
-    const selected=Array.isArray(r.selected)?r.selected.map(String):(r.selected==='all'?null:r.selected);
-    const box=$('disp-list');
-    if(!DISPLAYS.length){box.innerHTML='<div class="hint">'+t('disp_empty')+'</div>';$('disp-status').textContent='';return;}
-    let html=`<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
-      <input type="checkbox" id="disp-all" ${selected===null?'checked':''} style="width:auto">
-      <span style="color:var(--text);font-size:13px">${t('disp_all')} (${DISPLAYS.length}${t('disp_count')})</span></label>`;
-    for(const d of DISPLAYS){
-      const cur=d.picture?d.picture.split('/').pop():'';
-      const checked=selected&&selected.includes(String(d.index));
-      html+=`<label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer">
-        <input type="checkbox" class="disp-item" data-index="${d.index}" ${checked?'checked':''} ${selected===null?'disabled':''} style="width:auto">
-        <span style="color:var(--text);font-size:13px">#${d.index} · ${esc(d.name)}</span>
-        <span style="color:var(--muted);font-size:11px">${esc(cur)}</span></label>`;
-    }
-    box.innerHTML=html;
-    $('disp-all').onchange=e=>{document.querySelectorAll('.disp-item').forEach(c=>{c.checked=false;c.disabled=e.target.checked;});};
-    document.querySelectorAll('.disp-item').forEach(c=>c.onchange=()=>{
-      const any=[...document.querySelectorAll('.disp-item')].some(x=>x.checked);
-      $('disp-all').checked=!any;
-      document.querySelectorAll('.disp-item').forEach(x=>x.disabled=!any&&false);
-    });
-    $('disp-status').innerHTML=`<span class="badge ok">${DISPLAYS.length}${t('disp_count')}</span>`;
-  }catch(e){$('disp-status').innerHTML='<span class="badge err">'+esc(e.message)+'</span>';}
-}
-$('btn-displays').onclick=loadDisplays;
-$('btn-save-displays').onclick=async()=>{
-  const all=$('disp-all')&&$('disp-all').checked;
-  const picked=[...(document.querySelectorAll('.disp-item:checked'))].map(c=>+c.dataset.index);
-  try{await api('/api/config',{config:{wallpaper:{displays:all?'all':picked}}});
-    toast(t('disp_saved'));}catch(e){toast(e.message,true)}
-};
-
-/* ---------------- city picker ---------------- */
-let CHINA=[],US=[];
-function fillCitySelect(country,selected){
-  const sel=$('cfg-city');
-  sel.innerHTML='';
-  if(country==='china'){
-    for(const c of CHINA){
-      const o=document.createElement('option');
-      o.value=c.en;o.textContent=LANG==='zh'?`${c.cn} (${c.en})`:`${c.en} (${c.cn})`;
-      o.dataset.code=c.code;sel.appendChild(o);
-    }
-    if(selected)sel.value=selected;
-  }else if(country==='us'){
-    for(const name of US){const o=document.createElement('option');o.value=name;o.textContent=name;sel.appendChild(o);}
-    if(selected)sel.value=selected;
-  }
-  $('wrap-city-select').classList.toggle('hidden',country==='other');
-  $('wrap-city-text').classList.toggle('hidden',country!=='other');
-}
-function guessCountry(city){
-  if(CHINA.some(c=>c.en.toLowerCase()===String(city).toLowerCase()||c.cn===city))return 'china';
-  if(US.some(c=>c.toLowerCase()===String(city).toLowerCase()))return 'us';
-  return 'other';
-}
-$('cfg-country').onchange=()=>fillCitySelect($('cfg-country').value,null);
-$('btn-locate').onclick=async()=>{
-  try{
-    const r=await api('/api/locate',{});
-    let where=r.city+(r.country?', '+r.country:'');
-    if(r.china_city){$('cfg-country').value='china';fillCitySelect('china',r.china_city.en);}
-    else if(r.country_code==='US'&&US.includes(r.city)){$('cfg-country').value='us';fillCitySelect('us',r.city);}
-    else{$('cfg-country').value='other';fillCitySelect('other');$('cfg-city-free').value=r.city;}
-    if(r.latitude){$('cfg-lat').value=r.latitude;$('cfg-lon').value=r.longitude;}
-    toast(t('t_located')+where);
-  }catch(e){toast(t('t_locate_fail')+e.message,true)}
-};
-
-/* ---------------- weather key visibility ---------------- */
-function updateKeyHowto(){
-  const p=$('cfg-provider').value;
-  const needKey=(p==='qweather'||p==='openweathermap');
-  $('wkey-block').style.display=needKey?'':'none';
-  $('whost-wrap').style.display=p==='qweather'?'':'none';
-  $('key-howto').innerHTML=p==='qweather'?t('key_howto_q'):(p==='openweathermap'?t('key_howto_o'):t('key_howto_free'));
-}
-$('cfg-provider').addEventListener('change',updateKeyHowto);
-
-/* ---------------- collect / fill / save ---------------- */
-function collectWeather(){
-  const country=$('cfg-country').value;
-  let city='',code='';
-  if(country==='other'){city=$('cfg-city-free').value.trim();}
-  else{city=$('cfg-city').value;
-    const opt=$('cfg-city').selectedOptions[0];code=country==='china'?(opt&&opt.dataset.code||''):'';}
-  const lat=parseFloat($('cfg-lat').value),lon=parseFloat($('cfg-lon').value);
-  return{provider:$('cfg-provider').value,city:city||'Hangzhou',city_code:code,
-    api_key:$('cfg-weather-key').value.trim(),api_host:$('cfg-weather-host').value.trim(),
-    latitude:isNaN(lat)?null:lat,longitude:isNaN(lon)?null:lon};
-}
-function fillForm(cfg){
-  $('cfg-region').value=cfg.region||'auto';
-  $('cfg-proxy').value=cfg.network?.proxy||'';
-  $('cfg-provider').value=cfg.weather?.provider||'auto';
-  $('cfg-city-free').value=(cfg.weather?.provider==='auto'||!cfg.weather?.city)?'':
-    (guessCountry(cfg.weather?.city)==='other'?cfg.weather.city:'');
-  $('cfg-country').value=guessCountry(cfg.weather?.city||'Hangzhou');
-  fillCitySelect($('cfg-country').value,
-    $('cfg-country').value==='other'?null:(cfg.weather?.city||'Hangzhou'));
-  $('cfg-weather-key').value=cfg.weather?.api_key||'';
-  $('cfg-weather-key').placeholder=cfg.weather?.api_key?(LANG==='zh'?'已配置':'configured'):'';
-  $('cfg-weather-host').value=cfg.weather?.api_host||'';
-  $('cfg-lat').value=cfg.weather?.latitude??'';$('cfg-lon').value=cfg.weather?.longitude??'';
-  $('cfg-refresh').value=cfg.refresh_minutes||30;
-  $('cfg-temp-mode').value=cfg.naming?.temp_mode||'band';
-  $('cfg-bucket').value=cfg.naming?.time_bucket_hours||4;
-  $('gen-base-url').value=cfg.generator?.base_url||'';
-  $('gen-key').value=cfg.generator?.api_key||'';
-  $('gen-key').placeholder=cfg.generator?.api_key?(LANG==='zh'?'已配置(点击可修改)':'configured'):'sk-...';
-  $('gen-model').value=cfg.generator?.model||'gpt-image-1';
-  $('gen-size').value=cfg.generator?.size||'auto';
-  $('gen-prompt').value=cfg.generator?.prompt||'';
-  LANG=cfg.ui?.language||'en';$('cfg-lang').value=LANG;
-  const wg=cfg.widget||{};
-  $('wg-enable').checked=!!wg.enabled;
-  $('wg-style').value=wg.style||'glass';
-  $('wg-opacity').value=Math.round(((wg.bg_opacity??0.55))*100);
-  $('wg-op-v').textContent=$('wg-opacity').value+'%';
-  $('wg-scale').value=Math.round((wg.scale??1)*100);
-  $('wg-scale-v').textContent=(+$('wg-scale').value/100).toFixed(1);
-  WGPOS={x:+((wg.position||{}).x??0.94),y:+((wg.position||{}).y??0.08)};
-  wgPlace();
-  $('wg-fields').innerHTML='';
-  (wg.fields&&wg.fields.length?wg.fields:['{city}']).forEach(f=>wgAddField(String(f)));
-  wgRender();
-  const cc=cfg.widget_calendar||{};
-  $('cal-enable').checked=!!cc.enabled;
-  $('cal-style').value=cc.style||'glass';
-  $('cal-opacity').value=Math.round(((cc.bg_opacity??0.55))*100);
-  $('cal-op-v').textContent=$('cal-opacity').value+'%';
-  $('cal-scale').value=Math.round((cc.scale??0.5)*100);
-  $('cal-scale-v').textContent=(+$('cal-scale').value/100).toFixed(1);
-  CALPOS={x:+((cc.position||{}).x??0.09),y:+((cc.position||{}).y??0.5)};
-  calPlace();calRender();
-  applyI18n();
-}
-$('btn-save-gen').onclick=async()=>{
-  if(!$('gen-key').value.trim()){
-    $('gen-key').style.borderColor='var(--err)';
-    $('gen-key').focus();
-    toast(t('t_key_required'),true);
-    setTimeout(()=>$('gen-key').style.borderColor='',2400);
-    return;
-  }
-  try{await api('/api/config',{config:{generator:{
-    base_url:$('gen-base-url').value.trim()||'https://api.openai.com/v1',
-    api_key:$('gen-key').value.trim(),model:$('gen-model').value.trim()||'gpt-image-1',
-    size:$('gen-size').value,prompt:$('gen-prompt').value}}});
-    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
-$('gen-key').oninput=()=>{$('gen-key').style.borderColor='';};
-async function loadGenModels(){
-  try{
-    const r=await api('/api/gen-models');
-    const dl=$('model-options');dl.innerHTML='';
-    (r.models||[]).forEach(m=>{const o=document.createElement('option');o.value=m;dl.appendChild(o);});
-  }catch(e){/* base_url/key 未配置或网络不通: 静默保留手输 */}
-}
-$('gen-base-url').addEventListener('change',loadGenModels);
-$('gen-key').addEventListener('change',loadGenModels);
-$('btn-save-weather').onclick=async()=>{try{await api('/api/config',{config:{weather:collectWeather(),
-  region:$('cfg-region').value,network:{proxy:$('cfg-proxy').value.trim()}}});
-  toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
-$('btn-save-sch').onclick=async()=>{try{await api('/api/config',{config:{refresh_minutes:+$('cfg-refresh').value||30,
-  naming:{temp_mode:$('cfg-temp-mode').value,temp_band:5,time_bucket_hours:+$('cfg-bucket').value||4}}});
-  toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
-$('btn-save-lang').onclick=()=>setLang($('cfg-lang').value);
-
-/* ---------------- actions ---------------- */
-async function doDetect(){
-  try{const r=await api('/api/detect-region',{});
-    const label=r.region||(LANG==='zh'?'网络不可用':'unreachable');
-    $('detect-result').innerHTML='<span class="badge ok">'+esc(label)+'</span>';
-    toast((LANG==='zh'?'探测结果: ':'Detect: ')+label);loadStatus();
-  }catch(e){toast(e.message,true)}
-}
-$('btn-detect').onclick=doDetect;$('btn-detect2').onclick=doDetect;
-$('btn-refresh').onclick=async()=>{try{const r=await api('/api/refresh',{apply:true});
-  toast(r.queued?t('t_gen_q'):(r.ok?t('t_gen_ok'):(r.error||'error')));loadStatus();loadWalls();}catch(e){toast(e.message,true)}};
-$('btn-force').onclick=async()=>{if(!confirm(t('t_confirm_force')))return;
-  try{const r=await api('/api/force-generate',{apply:true});
-  toast(r.queued?t('t_gen_q'):t('t_gen_ok'));loadStatus();loadWalls();}catch(e){toast(e.message,true)}};
-$('btn-test').onclick=async()=>{try{const r=await api('/api/test-weather',{force:false});
-  $('test-result').innerHTML=`
-  <div class="kv"><span class="k">${t('st_weather')}</span><span class="v">${esc(r.weather.city)} · ${esc(WX_NAME[LANG][r.weather.tag]||r.weather.desc)} · ${r.weather.temp_current}℃ · ${esc(r.weather.provider)}</span></div>
-  <div class="kv"><span class="k">${t('st_file')}</span><span class="v"><span class="preview-name">${esc(r.stem)}.jpg</span>
-    ${r.cached?'<span class="badge ok">'+t('kw_cached')+'</span>':'<span class="badge warn">'+t('t_new')+'</span>'}</span></div>
-  <div class="kv"><span class="k">Prompt</span><span class="v" style="font-size:12px;color:var(--muted)">${esc(r.prompt)}</span></div>`;
-  }catch(e){toast(e.message,true)}};
-
-/* ---------------- widget (info overlay) ---------------- */
-let WGPOS={x:0.94,y:0.08};
-const getFieldInputs=()=>[...document.querySelectorAll('#wg-fields input')].map(i=>i.value);
-
-function wgSample(){
-  const w=ST_CACHE?.state?.last_weather||{city:LANG==='zh'?'杭州市':'Hangzhou',temp_current:22,temp_min:18,temp_max:28};
-  const tg=ST_CACHE?.state?.last_tags||{weather:'cloudy',hours:'1216',temp:'20-25',temp_min:18,temp_max:28,solarterm:'colddew'};
-  const n=new Date();
-  const wi=WX_ICON[tg.weather]||'';
-  const si=ST_ICON[tg.solarterm]||'';
-  return{city:w.city||'—',temp:Math.round(w.temp_current??0),temp_min:Math.round(w.temp_min??0),
-    temp_max:Math.round(w.temp_max??0),weather:tg.weather,weather_name:WX_NAME[LANG][tg.weather]||tg.weather,
-    weather_en:WX_NAME.en[tg.weather]||tg.weather,weather_cn:WX_NAME.zh[tg.weather]||tg.weather,
-    hours:tg.hours,solarterm:tg.solarterm,solarterm_name:ST_NAME[LANG][tg.solarterm]||tg.solarterm,
-    solarterm_en:ST_NAME.en[tg.solarterm]||tg.solarterm,solarterm_cn:ST_NAME.zh[tg.solarterm]||tg.solarterm,
-    weather_icon:wi,icon:wi,solarterm_icon:si,
-    time:n.toTimeString().slice(0,5),date:n.toISOString().slice(0,10)};
-}
-function wgFillLine(s){const r=wgSample();let out=String(s);for(const k in r)out=out.replaceAll('{'+k+'}',r[k]);return out;}
-
-function wgRender(){
-  const dg=$('wg-drag'),style=$('wg-style').value;
-  dg.className='wg-drag wgstyle-'+style;
-  dg.style.setProperty('--wgo',(+$('wg-opacity').value)/100);
-  const sc=+$('wg-scale').value/100;
-  dg.style.fontSize=Math.max(7,Math.min(30,13*sc))+'px';
-  const lines=getFieldInputs().map(v=>v.trim()).filter(Boolean).map(wgFillLine);
-  dg.innerHTML=lines.map((s,i)=>i===0?`<div class="t">${esc(s)}</div>`:`<div>${esc(s)}</div>`).join('')||'—';
-}
-function wgPlace(){
-  $('wg-drag').style.left=(WGPOS.x*100)+'%';
-  $('wg-drag').style.top=(WGPOS.y*100)+'%';
-}
-function wgAddField(v=''){
-  const row=document.createElement('div');row.className='wg-row';
-  row.innerHTML=`<input type="text" value="${esc(v)}">
-    <button class="op" data-a="up" title="up">↑</button>
-    <button class="op" data-a="dn" title="down">↓</button>
-    <button class="op" data-a="del" title="✕">✕</button>`;
-  row.querySelector('[data-a=up]').onclick=()=>row.previousElementSibling&&row.parentNode.insertBefore(row,row.previousElementSibling);
-  row.querySelector('[data-a=dn]').onclick=()=>row.nextElementSibling&&row.parentNode.insertBefore(row.nextElementSibling,row);
-  row.querySelector('[data-a=del]').onclick=()=>{row.remove();wgRender();};
-  row.querySelector('input').oninput=wgRender;
-  $('wg-fields').appendChild(row);
-}
-function wgPreviewBg(){
-  /* 预览背景优先跟随当前生效的基准图, 没有再回落最新壁纸 */
-  let url=null;
-  if(BASE_CACHE&&BASE_CACHE.active)url='/api/base-image-file?name='+encodeURIComponent(BASE_CACHE.active);
-  const g=WALL_CACHE&&WALL_CACHE.groups&&WALL_CACHE.groups[0];
-  if(!url&&g&&g.items&&g.items.length)url='/api/wallpaper-file?name='+encodeURIComponent(g.items[0].name);
-  if(url){$('wg-preview').style.backgroundImage=`url(${url})`;$('cal-preview').style.backgroundImage=`url(${url})`;}
-}
-(function(){
-  const pv=$('wg-preview'),dg=$('wg-drag');
-  /* position 语义 = 挂件盒中心点(0~1), 拖动时指针位置即新的中心 */
-  const setFromEvent=e=>{
-    const r=pv.getBoundingClientRect();
-    WGPOS.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
-    WGPOS.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
-    wgPlace();
-  };
-  let dragging=false;
-  dg.addEventListener('pointerdown',e=>{
-    if($('wg-style').value==='banner')return;
-    dragging=true;dg.setPointerCapture(e.pointerId);setFromEvent(e);e.preventDefault();
-  });
-  dg.addEventListener('pointermove',e=>{if(dragging)setFromEvent(e);});
-  dg.addEventListener('pointerup',()=>dragging=false);
-  dg.addEventListener('pointercancel',()=>dragging=false);
-})();
-$('wg-style').onchange=wgRender;
-$('wg-opacity').oninput=()=>{$('wg-op-v').textContent=$('wg-opacity').value+'%';wgRender();};
-$('wg-scale').oninput=()=>{$('wg-scale-v').textContent=(+$('wg-scale').value/100).toFixed(1);};
-$('wg-add').onclick=()=>{wgAddField('');$('wg-fields').lastElementChild.querySelector('input').focus();};
-$('btn-save-widget').onclick=async()=>{
-  const fields=getFieldInputs().map(v=>v.trim()).filter(Boolean);
-  try{await api('/api/config',{config:{widget:{
-    enabled:$('wg-enable').checked,style:$('wg-style').value,
-    bg_opacity:(+$('wg-opacity').value)/100,scale:(+$('wg-scale').value)/100,
-    position:{x:+WGPOS.x.toFixed(3),y:+WGPOS.y.toFixed(3)},fields}}});
-    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
-
-/* ---------------- calendar widget ---------------- */
-let CALPOS={x:0.09,y:0.5};
-const CALWD={en:['Mo','Tu','We','Th','Fr','Sa','Su'],zh:['一','二','三','四','五','六','日']};
-function calRender(){
-  const dg=$('cal-drag'),style=$('cal-style').value;
-  dg.className='wg-drag calgrid wgstyle-'+style;
-  dg.style.setProperty('--wgo',(+$('cal-opacity').value)/100);
-  const sc=+$('cal-scale').value/100;
-  dg.style.fontSize=Math.max(6,Math.min(26,11*sc))+'px';
-  const n=new Date(),wd=CALWD[LANG]||CALWD.en;
-  const first=new Date(n.getFullYear(),n.getMonth(),1);
-  const start=(first.getDay()+6)%7;               /* Monday=0 */
-  const days=new Date(n.getFullYear(),n.getMonth()+1,0).getDate();
-  const title=LANG==='zh'?n.getFullYear()+'年'+(n.getMonth()+1)+'月'
-    :first.toLocaleString('en',{month:'long'})+' '+n.getFullYear();
-  let html=`<div class="t">${title}</div><div class="cg">`;
-  wd.forEach((w,i)=>{html+=`<span class="hd${i>=5?' we':''}">${w}</span>`;});
-  for(let i=0;i<start;i++)html+='<span></span>';
-  for(let d=1;d<=days;d++){
-    const col=(start+d-1)%7;
-    html+=d===n.getDate()?`<span class="today">❤${d}</span>`
-      :`<span${col>=5?' class="we"':''}>${d}</span>`;
-  }
-  dg.innerHTML=html+'</div>';
-}
-function calPlace(){
-  $('cal-drag').style.left=(CALPOS.x*100)+'%';
-  $('cal-drag').style.top=(CALPOS.y*100)+'%';
-}
-(function(){
-  const pv=$('cal-preview'),dg=$('cal-drag');
-  const setFromEvent=e=>{
-    const r=pv.getBoundingClientRect();
-    CALPOS.x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
-    CALPOS.y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
-    calPlace();
-  };
-  let dragging=false;
-  dg.addEventListener('pointerdown',e=>{
-    if($('cal-style').value==='banner')return;
-    dragging=true;dg.setPointerCapture(e.pointerId);setFromEvent(e);e.preventDefault();
-  });
-  dg.addEventListener('pointermove',e=>{if(dragging)setFromEvent(e);});
-  dg.addEventListener('pointerup',()=>dragging=false);
-  dg.addEventListener('pointercancel',()=>dragging=false);
-})();
-$('cal-style').onchange=calRender;
-$('cal-opacity').oninput=()=>{$('cal-op-v').textContent=$('cal-opacity').value+'%';calRender();};
-$('cal-scale').oninput=()=>{$('cal-scale-v').textContent=(+$('cal-scale').value/100).toFixed(1);calRender();};
-$('btn-save-calendar').onclick=async()=>{
-  try{await api('/api/config',{config:{widget_calendar:{
-    enabled:$('cal-enable').checked,style:$('cal-style').value,
-    bg_opacity:(+$('cal-opacity').value)/100,scale:(+$('cal-scale').value)/100,
-    position:{x:+CALPOS.x.toFixed(3),y:+CALPOS.y.toFixed(3)}}}});
-    toast(t('t_saved'));loadStatus();}catch(e){toast(e.message,true)}};
-
-/* ---------------- init ---------------- */
-(async function init(){
-  try{
-    const [cfg,cities]=await Promise.all([api('/api/config'),api('/api/cities')]);
-    CHINA=cities.china;US=cities.us;
-    DEFAULT_BASE_PROMPT=cfg.default_base_prompt||'';
-    fillForm(cfg.config);
-    renderStatus(ST_CACHE);
-  }catch(e){toast(e.message,true)}
-  loadStatus();loadBases();loadWalls();
-  loadGenModels();
-  wgRender();wgPlace();calRender();calPlace();
-  setTimeout(()=>{wgPreviewBg();wgRender();},800);
-  setInterval(loadStatus,15000);
-})();
-</script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

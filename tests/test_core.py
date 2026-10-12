@@ -72,10 +72,39 @@ class TestNaming(unittest.TestCase):
         self.assertEqual(naming.hours_label(dt.datetime(2026, 10, 10, 2, 0), cfg), "0004")
 
     def test_full_stem(self):
-        now = dt.datetime(2026, 2, 5, 13, 0)  # 立春次日 12~16 桶
+        now = dt.datetime(2026, 2, 5, 13, 0)  # 立春次日 中午
         tags = naming.compose_tags(self.weather(), now, self.NAMING)
+        # 默认缓存键: 天气/时段/节气参与, 温度/日期不参与
         stem = naming.compose_stem("westlake", tags)
-        self.assertEqual(stem, "westlake_rain_1216_20-25_springbegin")
+        self.assertEqual(stem, "westlake_rain_noon_springbegin")
+        # 全部元素参与缓存键
+        all_on = {"weather": True, "period": True, "temp": True,
+                  "solarterm": True, "date": True}
+        self.assertEqual(
+            naming.compose_stem("westlake", tags, all_on),
+            "westlake_rain_noon_20-25_20260205_springbegin")
+        # 只留天气
+        only_weather = {"weather": True, "period": False, "temp": False,
+                        "solarterm": False, "date": False}
+        self.assertEqual(naming.compose_stem("westlake", tags, only_weather),
+                         "westlake_rain")
+
+    def test_expand_dt_placeholders(self):
+        now = dt.datetime(2026, 10, 12, 9, 5)
+        self.assertEqual(naming.expand_dt_placeholders("{time_HH:mm}", now), "09:05")
+        self.assertEqual(naming.expand_dt_placeholders("{date_YYYY-MM-DD}", now), "2026-10-12")
+        self.assertEqual(naming.expand_dt_placeholders("{date_MM/DD}", now), "10/12")
+        self.assertEqual(naming.expand_dt_placeholders("{time_HH}点{time_mm}分", now), "09点05分")
+        # 无占位符原样返回
+        self.assertEqual(naming.expand_dt_placeholders("{time}", now), "{time}")
+
+    def test_period_word_repl(self):
+        now = dt.datetime(2026, 10, 12, 9, 5)  # 上午 forenoon
+        tags = naming.compose_tags(self.weather(), now, self.NAMING)
+        repl = naming.period_word_repl(tags, "zh")
+        self.assertEqual(repl["forenoon"], "上午")
+        self.assertEqual(repl["noon"], "")  # 非当前时段为空
+        self.assertEqual(repl["morning"], "")
 
     def test_find_cached(self):
         with tempfile.TemporaryDirectory() as td:
@@ -232,7 +261,7 @@ class TestConfig(unittest.TestCase):
                     cfg = config.load_config()
                 self.assertEqual(cfg["generator"]["prompt"], config.DEFAULT_PROMPT)
             # 新默认带昼夜与本地时间占位符
-            self.assertIn("{daypart_name}", config.DEFAULT_PROMPT)
+            self.assertIn("{period_name}", config.DEFAULT_PROMPT)
             self.assertIn("{time}", config.DEFAULT_PROMPT)
             # 上一版默认(含 sun, moon or stars)已列入自动迁移
             self.assertTrue(any("sun, moon or stars" in p for p in config.LEGACY_PROMPTS))
@@ -353,12 +382,22 @@ class TestWidget(unittest.TestCase):
         from weatherwall import widget
         info = {"city": "Hangzhou", "temp_current": 23.4, "temp_min": 12.0, "temp_max": 23.0}
         tags = {"weather": "rain", "hours": "1216", "temp": "20-25", "temp_value": 23,
-                "temp_min": 12, "temp_max": 23, "solarterm": "springbegin"}
+                "temp_min": 12, "temp_max": 23, "solarterm": "springbegin",
+                "daypart": "noon"}
         now = dt.datetime(2026, 2, 5, 13, 5)
         lines = widget.fill_lines(
             ["{city}", "{weather_name} {temp}°C", "自己加的话语 {time}", ""],
             info, tags, now, "en")
         self.assertEqual(lines, ["Hangzhou", "Rain 23°C", "自己加的话语 13:05"])
+        # 时段词: {period} 输出本地词, 单一时段 key 仅当前时段非空(空行丢弃)
+        self.assertEqual(widget.fill_lines(["{period}"], info, tags, now, "zh"), ["中午"])
+        self.assertEqual(widget.fill_lines(["{noon}", "{dusk}"], info, tags, now, "zh"),
+                         ["中午"])
+        self.assertEqual(widget.fill_lines(["{period_en}"], info, tags, now, "zh"), ["Noon"])
+        # 带格式时间/日期
+        self.assertEqual(widget.fill_lines(["{time_HH:mm}", "{date_YYYY/MM/DD}"],
+                                           info, tags, now, "en"),
+                         ["13:05", "2026/02/05"])
         # 未知占位符原样保留
         self.assertEqual(widget.fill_lines(["{nope}"], info, tags, now, "en"), ["{nope}"])
         # 全空行 -> 空列表
@@ -483,14 +522,14 @@ class TestCalendarWidget(unittest.TestCase):
 
     def test_compose_calendar_smoke(self):
         import datetime as dt
-        import shutil as sh
         from weatherwall import widget
-        if not (sh.which("ffmpeg") and widget.find_font()):
-            self.skipTest("本机无 ffmpeg/字体, 跳过日历合成冒烟")
+        if not widget.available():  # ffmpeg(含 drawtext)或字体缺失
+            self.skipTest("本机 ffmpeg/字体不可用, 跳过日历合成冒烟")
+        ffmpeg = widget.find_ffmpeg()
         # 1x1 起步的纯色 JPEG 由 ffmpeg 现做, 避免测试夹带二进制
         with tempfile.TemporaryDirectory() as td:
             src = Path(td) / "in.jpg"
-            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                             "-f", "lavfi", "-i", "color=c=steelblue:s=1280x720",
                             "-frames:v", "1", str(src)], check=True)
             now = dt.datetime(2026, 10, 12, 9, 30)
@@ -505,8 +544,8 @@ class TestCalendarWidget(unittest.TestCase):
 
 class TestDaypart(unittest.TestCase):
     def test_daypart_of(self):
-        cases = {6: "dawn", 9: "morning", 12: "noon", 15: "afternoon",
-                 18: "evening", 21: "night", 23: "latenight", 2: "latenight"}
+        cases = {6: "morning", 9: "forenoon", 12: "noon", 15: "afternoon",
+                 18: "dusk", 21: "evening", 23: "latenight", 2: "latenight"}
         for hour, tag in cases.items():
             self.assertEqual(naming.daypart_of(hour), tag, f"hour {hour}")
 
@@ -514,10 +553,18 @@ class TestDaypart(unittest.TestCase):
         info = {"tag": "rain", "temp_current": 10.0, "temp_min": 5.0, "temp_max": 12.0}
         tags = naming.compose_tags(info, dt.datetime(2026, 10, 11, 18, 15), {})
         self.assertEqual(tags["time"], "18:15")
-        self.assertEqual(tags["daypart"], "evening")
+        self.assertEqual(tags["daypart"], "dusk")
         self.assertEqual(tags["daypart_cn"], "傍晚")
-        out = naming.fill_prompt("{daypart_name}|{time}", tags, "杭州市", "b", lang="zh")
-        self.assertEqual(out, "傍晚|18:15")
+        self.assertEqual(tags["period"], "dusk")       # period 为 daypart 别名
+        self.assertEqual(tags["date_key"], "20261011")
+        out = naming.fill_prompt("{daypart_name}|{period_name}|{time}", tags, "杭州市", "b", lang="zh")
+        self.assertEqual(out, "傍晚|傍晚|18:15")
+        # 单一时段 key: 仅当前时段非空
+        out2 = naming.fill_prompt("[{dusk}][{evening}][{noon}]", tags, "杭州市", "b", lang="zh")
+        self.assertEqual(out2, "[傍晚][][]")
+        # 带格式时间占位符
+        out3 = naming.fill_prompt("{time_HH:mm} {date_MMDD}", tags, "杭州市", "b", lang="zh")
+        self.assertEqual(out3, "18:15 1011")
 
 
 class TestSchedulerHelpers(unittest.TestCase):

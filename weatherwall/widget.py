@@ -12,6 +12,7 @@ compose() 返回 JPEG bytes; 失败抛 WidgetError, 调用方应回退使用原�
 
 import datetime
 import json
+import os
 import shutil
 import struct
 import subprocess
@@ -20,15 +21,71 @@ from pathlib import Path
 
 from .weather import weather_display, WEATHER_ICON
 from .solarterm import solarterm_display, SOLARTERM_ICON
+from .naming import daypart_display, expand_dt_placeholders, period_word_repl
 
 
 class WidgetError(Exception):
     pass
 
 
+# PATH 之外补充扫描的常见安装位置(macOS Homebrew arm/x86、Linux brew、系统路径)
+_BIN_DIRS = (
+    "/opt/homebrew/bin",        # macOS Apple Silicon Homebrew
+    "/usr/local/bin",           # macOS Intel Homebrew / Linux usr-local
+    "/home/linuxbrew/.linuxbrew/bin",
+    "/usr/bin",
+    "/bin",
+    "C:\\ffmpeg\\bin",
+)
+
+
+def _find_bin(name: str) -> str | None:
+    w = shutil.which(name)
+    if w:
+        return w
+    for d in _BIN_DIRS:
+        p = Path(d) / name
+        if p.is_file() and os.access(p, os.X_OK):
+            return str(p)
+    return None
+
+
+def find_ffmpeg() -> str | None:
+    return _find_bin("ffmpeg")
+
+
+def find_ffprobe() -> str | None:
+    return _find_bin("ffprobe")
+
+
+_DRAWTEXT_CACHE: dict[str, bool] = {}
+
+
+def ffmpeg_has_drawtext(bin_path: str) -> bool:
+    """drawtext 需要编译进 freetype; 个别精简构建没有, 提前探测避免合成必败。"""
+    if bin_path not in _DRAWTEXT_CACHE:
+        try:
+            r = subprocess.run([bin_path, "-hide_banner", "-filters"],
+                               capture_output=True, timeout=10)
+            _DRAWTEXT_CACHE[bin_path] = " drawtext" in r.stdout.decode("utf-8", "replace")
+        except (OSError, subprocess.TimeoutExpired):
+            _DRAWTEXT_CACHE[bin_path] = False
+    return _DRAWTEXT_CACHE[bin_path]
+
+
+def _require_drawtext() -> str:
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise WidgetError("未找到 ffmpeg(可用 brew install ffmpeg 安装), 无法合成挂件")
+    if not ffmpeg_has_drawtext(ffmpeg):
+        raise WidgetError("当前 ffmpeg 缺少 drawtext 滤镜, 请安装完整版(如 brew reinstall ffmpeg)")
+    return ffmpeg
+
+
 def available() -> bool:
-    """挂件功能可用: 需要 ffmpeg 与至少一个字体文件。"""
-    return bool(shutil.which("ffmpeg") and find_font())
+    """挂件功能可用: 需要 ffmpeg(含 drawtext)与至少一个字体文件。"""
+    ffmpeg = find_ffmpeg()
+    return bool(ffmpeg and ffmpeg_has_drawtext(ffmpeg) and find_font())
 
 
 def fit_to(data: bytes, width: int, height: int) -> tuple[bytes, str]:
@@ -40,13 +97,14 @@ def fit_to(data: bytes, width: int, height: int) -> tuple[bytes, str]:
             return data, _ext_of(data)
     except WidgetError:
         pass
-    if not shutil.which("ffmpeg"):
-        raise WidgetError("未找到 ffmpeg, 无法适配分辨率")
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise WidgetError("未找到 ffmpeg(可用 brew install ffmpeg 安装), 无法适配分辨率")
     vf = (f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
           f"crop={width}:{height}")
     with tempfile.TemporaryDirectory(prefix="weatherwall-fit-") as td:
         out = Path(td) / "out.jpg"
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                "-i", "-", "-vf", vf, "-frames:v", "1", "-q:v", "2", str(out)]
         try:
             r = subprocess.run(cmd, input=data, capture_output=True, timeout=120)
@@ -60,9 +118,11 @@ def fit_to(data: bytes, width: int, height: int) -> tuple[bytes, str]:
 # ---------- 字段模板填充 ----------
 
 def build_repl(info: dict, tags: dict, now: datetime.datetime, lang: str = "en") -> dict:
-    """挂件模板可用占位符。{temp} 是当前温度(与 prompt 模板一致), 另加时间日期与图标。"""
+    """挂件模板可用占位符。{temp} 是当前温度(与 prompt 模板一致), 另加时间日期、
+    时段词(period 跟随渲染时段, 各时段 key 仅当前时段非空)与图标。"""
     weather_icon = WEATHER_ICON.get(str(tags.get("weather") or ""), "")
     solarterm_icon = SOLARTERM_ICON.get(str(tags.get("solarterm") or ""), "")
+    daypart = str(tags.get("daypart") or tags.get("period") or "")
     return {
         **tags,
         "weather_name": weather_display(tags["weather"], lang),
@@ -74,12 +134,17 @@ def build_repl(info: dict, tags: dict, now: datetime.datetime, lang: str = "en")
         "weather_icon": weather_icon,
         "icon": weather_icon,  # 旧名兼容
         "solarterm_icon": solarterm_icon,
+        "period": daypart_display(daypart, lang),
+        "period_name": daypart_display(daypart, lang),
+        "period_en": daypart_display(daypart, "en"),
+        "period_cn": daypart_display(daypart, "zh"),
         "city": str(info.get("city") or ""),
         "temp": _fmt_temp(info.get("temp_current")),
         "temp_min": _fmt_temp(info.get("temp_min")),
         "temp_max": _fmt_temp(info.get("temp_max")),
         "time": now.strftime("%H:%M"),
         "date": now.strftime("%Y-%m-%d"),
+        **period_word_repl(tags, lang),
     }
 
 
@@ -93,14 +158,15 @@ def _fmt_temp(v) -> str:
 
 def fill_lines(fields, info: dict, tags: dict, now: datetime.datetime,
                lang: str = "en") -> list[str]:
-    """模板行列表 -> 填好占位符的文本行(空行丢弃)。未知占位符原样保留。"""
+    """模板行列表 -> 填好占位符的文本行(空行丢弃)。
+    未知占位符原样保留; {time_..}/{date_..} 带格式占位符自动展开。"""
     repl = build_repl(info, tags, now, lang)
     out = []
     for line in fields or []:
         s = str(line)
         for k, v in repl.items():
             s = s.replace("{" + k + "}", str(v))
-        s = s.strip()
+        s = expand_dt_placeholders(s, now).strip()
         if s:
             out.append(s)
     return out
@@ -373,7 +439,10 @@ def _probe_size(data: bytes) -> tuple[int, int]:
             seg = struct.unpack(">H", data[i + 2:i + 4])[0]
             i += 2 + seg
     try:
-        r = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json",
+        ffprobe = find_ffprobe()
+        if not ffprobe:
+            raise WidgetError("未找到 ffprobe, 无法解析图片尺寸")
+        r = subprocess.run([ffprobe, "-v", "quiet", "-print_format", "json",
                             "-show_streams", "-"], input=data, capture_output=True, timeout=20)
         for st in json.loads(r.stdout or "{}").get("streams", []):
             if st.get("width") and st.get("height"):
@@ -386,8 +455,7 @@ def _probe_size(data: bytes) -> tuple[int, int]:
 def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
             now: datetime.datetime, lang: str = "en") -> tuple[bytes, str]:
     """主入口: 壁纸 bytes -> 合成挂件后的 (jpeg bytes, "jpg")。"""
-    if not shutil.which("ffmpeg"):
-        raise WidgetError("未找到 ffmpeg, 无法合成挂件")
+    ffmpeg = _require_drawtext()
     lines = fill_lines(wcfg.get("fields"), info, tags, now, lang)
     if not lines:
         raise WidgetError("挂件内容为空")
@@ -408,7 +476,7 @@ def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
     lay = layout(lines, img_w, img_h, wcfg, icon_glyphs, icon_font)
     with tempfile.TemporaryDirectory(prefix="weatherwall-wg-") as td:
         tdir = Path(td)
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                "-i", "-", *(_ffargs(lay, wcfg, font, tdir, img_w)),
                "-frames:v", "1", "-q:v", "2", str(tdir / "out.jpg")]
         try:
@@ -422,8 +490,6 @@ def compose(data: bytes, wcfg: dict, info: dict, tags: dict,
 
 
 # ---------- 日历挂件 ----------
-
-HEART = "\u2665"  # 今日标记: 红心(需字体覆盖, 无则仅红字标注)
 
 CAL_WEEKDAYS = {
     "en": ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"),
@@ -535,34 +601,17 @@ def _cal_ffargs(lay: dict, ccfg: dict, font: str, tdir: Path, img_w: int) -> lis
 
 def compose_calendar(data: bytes, ccfg: dict, now: datetime.datetime,
                      lang: str = "en") -> tuple[bytes, str]:
-    """日历挂件主入口: 壁纸 bytes -> 合成月历后的 (jpeg bytes, "jpg")。今日红心标注。"""
-    if not shutil.which("ffmpeg"):
-        raise WidgetError("未找到 ffmpeg, 无法合成日历")
+    """日历挂件主入口: 壁纸 bytes -> 合成月历后的 (jpeg bytes, "jpg")。今日红色高亮。"""
+    ffmpeg = _require_drawtext()
     font = find_font()
     if font is None:
         raise WidgetError("未找到可用字体文件")
     img_w, img_h = _probe_size(data)
     lay = calendar_layout(img_w, img_h, ccfg, now, lang)
 
-    # 今日红心: 找得到覆盖 ♥ 的字体才画(数字左侧, 不挤占列宽); 否则仅红字标注
-    heart_font = find_icon_font({HEART}) or (font if font_covers(font, HEART) else None)
-    if heart_font:
-        today = next((c for c in lay["cells"]
-                      if c["color"].startswith("0xff4d5e") and c["text"] == str(now.day)), None)
-        if today:
-            heart_sz = round(lay["day_sz"] * 0.62)
-            hx = today["x"] - round(heart_sz * 1.05)
-            if hx < lay["box"][0] + lay["pad"] - round(lay["pad"] * 0.8):
-                hx = today["x"]  # 兜底: 放不下就不偏移
-            lay["cells"].append({"text": HEART, "x": hx,
-                                 "y": today["y"] + round((lay["day_sz"] - heart_sz) * 0.35),
-                                 "fontsize": heart_sz,
-                                 "color": "0xff4d5e@0.98", "w": 0,
-                                 "font": heart_font})
-
     with tempfile.TemporaryDirectory(prefix="weatherwall-cal-") as td:
         tdir = Path(td)
-        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
                "-i", "-", *(_cal_ffargs(lay, ccfg, font, tdir, img_w)),
                "-frames:v", "1", "-q:v", "2", str(tdir / "out.jpg")]
         try:

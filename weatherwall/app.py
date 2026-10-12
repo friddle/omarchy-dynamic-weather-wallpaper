@@ -4,6 +4,7 @@
 """
 
 import datetime as dt
+import hashlib
 import json
 import threading
 import time
@@ -115,8 +116,8 @@ class App:
             cfg, base_path = self._heal_base_image(cfg)
             tags = naming.compose_tags(info, now, cfg["naming"])
             base_name = config.base_stem(cfg)
-            stem = naming.compose_stem(base_name, tags)
-            self.log(f"标签: {tags['weather']} | {tags['hours']} | {tags['temp']} | "
+            stem = naming.compose_stem(base_name, tags, (cfg["naming"] or {}).get("cache_key"))
+            self.log(f"标签: {tags['weather']} | {tags['daypart']} | {tags['temp']} | "
                      f"{tags['solarterm']}({tags['solarterm_cn']}) -> {stem}")
 
             # 4. 懒加载：两层壁纸库 wallpapers/{基准图前缀}/，缓存命中直接用
@@ -129,6 +130,9 @@ class App:
                 target.unlink()
                 target = None
                 cached = False
+            if not cached:
+                # AI 图重新生成过: 成品合成签名作废, 强制重走挂件合成
+                self.state["compose_sig"] = None
             if target is None:
                 prompt = naming.fill_prompt(
                     cfg["generator"].get("prompt") or "", tags, info["city"], base_name,
@@ -179,42 +183,59 @@ class App:
                              f"({'基准图模式' if base_path else '文生图模式'}, "
                              f"{'降级直用基准图' if not cfg['generator'].get('api_key') else 'API生成'})")
 
-            # 4.5 应用前图片操作: 分辨率适配显示器 + 可选信息挂件; 任一步失败回落原图
+            # 4.5 两段式第二段: 基于 AI 中间图做 分辨率适配 + 信息挂件 + 日历挂件,
+            #     成品写 applied/。签名(日期+挂件配置+分辨率+语言)一致且成品存在则直接复用 ——
+            #     日期变化只重合成日历, 不触发 AI 重新生图。
             apply_target = target
             wcfg = cfg.get("widget") or {}
+            ccfg = cfg.get("widget_calendar") or {}
+            lang = str((cfg.get("ui") or {}).get("language") or "en")
+            res = wallpaper.display_resolution()
+            sig = hashlib.md5(json.dumps({
+                "date": now.strftime("%Y-%m-%d"),
+                "res": res,
+                "widget": wcfg if wcfg.get("enabled") else None,
+                "calendar": ccfg if ccfg.get("enabled") else None,
+                "lang": lang,
+            }, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()[:10]
+            out = config.applied_dir() / f"{target.stem}.jpg"
             data = None
             try:
                 from . import widget as infowidget
-                res = wallpaper.display_resolution()
-                if res:
-                    try:
-                        data, _ = infowidget.fit_to(target.read_bytes(), *res)
-                    except Exception as e:  # noqa: BLE001
-                        self.log(f"分辨率适配失败，使用原图: {e}")
-                if wcfg.get("enabled"):
-                    src = data if data is not None else target.read_bytes()
-                    try:
-                        data, _ = infowidget.compose(
-                            src, wcfg, info, tags, now,
-                            lang=str((cfg.get("ui") or {}).get("language") or "en"))
-                        self.log(f"挂件已合成 (样式: {wcfg.get('style') or 'glass'})")
-                    except Exception as e:  # noqa: BLE001 - 保留已适配的图
-                        self.log(f"挂件合成失败: {e}")
-                ccfg = cfg.get("widget_calendar") or {}
-                if ccfg.get("enabled"):
-                    src = data if data is not None else target.read_bytes()
-                    try:
-                        data, _ = infowidget.compose_calendar(
-                            src, ccfg, now,
-                            lang=str((cfg.get("ui") or {}).get("language") or "en"))
-                        self.log("日历挂件已合成")
-                    except Exception as e:  # noqa: BLE001 - 保留已合成的图
-                        self.log(f"日历挂件合成失败: {e}")
-                if data is not None:
-                    out = config.applied_dir() / f"{target.stem}.jpg"
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    out.write_bytes(data)
+                if out.exists() and self.state.get("compose_sig") == sig \
+                        and self.state.get("compose_stem") == target.stem:
                     apply_target = out
+                    self.log(f"成品缓存命中(合成签名一致): {out.name}")
+                else:
+                    if res:
+                        try:
+                            data, _ = infowidget.fit_to(target.read_bytes(), *res)
+                        except Exception as e:  # noqa: BLE001
+                            self.log(f"分辨率适配失败，使用原图: {e}")
+                    if wcfg.get("enabled"):
+                        src = data if data is not None else target.read_bytes()
+                        try:
+                            data, _ = infowidget.compose(
+                                src, wcfg, info, tags, now, lang=lang)
+                            self.log(f"挂件已合成 (样式: {wcfg.get('style') or 'glass'})")
+                        except Exception as e:  # noqa: BLE001 - 保留已适配的图
+                            self.log(f"挂件合成失败: {e}")
+                    if ccfg.get("enabled"):
+                        src = data if data is not None else target.read_bytes()
+                        try:
+                            data, _ = infowidget.compose_calendar(
+                                src, ccfg, now, lang=lang)
+                            self.log("日历挂件已合成")
+                        except Exception as e:  # noqa: BLE001 - 保留已合成的图
+                            self.log(f"日历挂件失败: {e}")
+                    if data is not None:
+                        out.parent.mkdir(parents=True, exist_ok=True)
+                        out.write_bytes(data)
+                        apply_target = out
+                        self.state["compose_sig"] = sig
+                        self.state["compose_stem"] = target.stem
+                    else:
+                        self.state["compose_sig"] = None
             except Exception as e:  # noqa: BLE001 - 图片操作失败不影响壁纸
                 self.log(f"图片操作跳过: {e}")
 

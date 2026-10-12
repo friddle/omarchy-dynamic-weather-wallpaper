@@ -37,11 +37,16 @@ from .app import App
 from . import net
 from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
 
-# 无需令牌的端点: 设置页本身、顶栏挂件用的状态接口、城市静态表和图片预览。
+# 无需令牌的端点: 设置页本身(含拆分出的静态资源)、顶栏挂件用的状态接口、城市静态表和图片预览。
 # 其余(含 API 明文的 /api/config、各种变更操作)一律要求 X-Token 请求头,
 # 防止同机其他账户未授权读取密钥或改动配置。
-_OPEN_PATHS = {"/", "/index.html", "/api/status", "/api/cities",
+_OPEN_PATHS = {"/", "/index.html", "/style.css", "/app.js", "/i18n.js",
+               "/api/status", "/api/cities",
                "/api/wallpaper-file", "/api/base-image-file"}
+
+# 设置页静态资源及 MIME(按扩展名)
+_WEB_STATIC = {"/style.css": "text/css", "/app.js": "application/javascript",
+               "/i18n.js": "application/javascript"}
 
 _TOKEN = ""
 
@@ -71,10 +76,10 @@ def _auth_token() -> str:
 
 
 def _index_html() -> bytes:
-    """返回注入了令牌的设置页(注入到首个 <script> 之前, 页面 JS 自动携带)。"""
+    """返回注入了令牌的设置页(注入到首个 script 标签之前, 页面 JS 自动携带)。"""
     data = web_index_path().read_bytes()
     inject = (b"<script>var APITOKEN=" + json.dumps(_auth_token()).encode() + b";</script>")
-    i = data.find(b"<script>")
+    i = data.find(b"<script")   # 兼容 <script src=...> 外链形式
     return data[:i] + inject + data[i:] if i >= 0 else data + inject
 
 
@@ -86,6 +91,19 @@ def web_index_path() -> Path:
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         frozen = Path(meipass) / "weatherwall" / "web" / "index.html"
+        if frozen.exists():
+            return frozen
+    return p
+
+
+def web_static_path(name: str) -> Path:
+    """设置页静态资源(style.css / app.js / i18n.js), 冻结环境同样回落 _MEIPASS。"""
+    p = Path(__file__).parent / "web" / name
+    if p.exists():
+        return p
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        frozen = Path(meipass) / "weatherwall" / "web" / name
         if frozen.exists():
             return frozen
     return p
@@ -197,6 +215,11 @@ def make_handler(app: App) -> type:
                     return self._json({"ok": False, "error": "unauthorized"}, 401)
                 if url.path in ("/", "/index.html"):
                     self._file(_index_html(), "text/html; charset=utf-8")
+                elif url.path in _WEB_STATIC:
+                    p = web_static_path(url.path.lstrip("/"))
+                    if not p.exists():
+                        return self._json({"ok": False, "error": "not found"}, 404)
+                    self._file(p, _WEB_STATIC[url.path] + "; charset=utf-8")
                 elif url.path == "/api/cities":
                     self._json({"ok": True, "china": china_cities(), "us": US_CITIES})
                 elif url.path == "/api/status":

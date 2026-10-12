@@ -30,6 +30,9 @@ jobs:
           --name WeatherDynamicWallpaper
           --icon assets/icon.ico
           --add-data "weatherwall/web/index.html;weatherwall/web"
+          --add-data "weatherwall/web/style.css;weatherwall/web"
+          --add-data "weatherwall/web/app.js;weatherwall/web"
+          --add-data "weatherwall/web/i18n.js;weatherwall/web"
           --add-data "weatherwall/seed/island.png;weatherwall/seed"
           --collect-all webview
           --collect-all pythonnet
