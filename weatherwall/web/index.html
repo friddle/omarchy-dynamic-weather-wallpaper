@@ -655,7 +655,8 @@ function applyI18n(){
 function toast(msg,err){const tb=$('toast');tb.textContent=msg;tb.className='show'+(err?' err':'');
   clearTimeout(tb._h);tb._h=setTimeout(()=>tb.className='',3200);}
 async function api(path,body){
-  const opt=body!==undefined?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};
+  const hs={'X-Token':(typeof APITOKEN!=='undefined')?APITOKEN:''};
+  const opt=body!==undefined?{method:'POST',headers:Object.assign(hs,{'Content-Type':'application/json'}),body:JSON.stringify(body)}:{headers:hs};
   const r=await fetch(path,opt);const j=await r.json().catch(()=>({ok:false,error:'bad response'}));
   if(!j.ok&&j.error)throw new Error(j.error);return j;}
 

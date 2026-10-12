@@ -71,6 +71,10 @@ chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
 - Wallpaper service: Python 3 (standard library only) and a systemd user session.
 - No sudo/pkexec is required anywhere.
 
+### Security
+
+The control server binds to `127.0.0.1` only and, since v1.3.1, requires a per-install token (auto-generated at `~/.config/omarchy-dynamic-wallpaper/token`, mode 0600) for every endpoint that reads or writes configuration — the settings page receives the token injected by the server itself, so there is nothing to configure. `/api/status`, the page itself and image previews stay token-free so the bar widget and installer probe work unauthenticated; they never expose keys. `config.json` and its directory are restricted to the owning user (0600/0700).
+
 ### Removal
 
 ```bash

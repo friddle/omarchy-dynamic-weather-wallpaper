@@ -71,6 +71,10 @@ chmod +x ~/.config/omarchy/hooks/theme-set.d/keep-dynamic-wallpaper
 - 壁纸服务:Python 3(仅标准库)+ systemd 用户会话。
 - 全程无需 sudo/pkexec。
 
+### 安全
+
+控制服务只绑定 `127.0.0.1`；自 v1.3.1 起，所有读取/写入配置的接口都要求本机令牌（首次启动自动生成于 `~/.config/omarchy-dynamic-wallpaper/token`，权限 0600）。设置页由服务端自动注入令牌，无需手工配置；`/api/status`、页面本身与图片预览保持免令牌（不暴露任何密钥），供顶栏挂件与安装探测使用。`config.json` 及其目录权限收紧为仅本用户可读（0600/0700）。
+
 ### 卸载
 
 ```bash

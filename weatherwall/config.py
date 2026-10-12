@@ -266,6 +266,12 @@ def state_file() -> Path:
 def ensure_dirs() -> None:
     for d in (config_dir(), base_images_dir(), cache_dir()):
         d.mkdir(parents=True, exist_ok=True)
+    # 配置目录含 API Key, 收紧为仅本用户可进入(POSIX)
+    if os.name != "nt":
+        try:
+            os.chmod(config_dir(), 0o700)
+        except OSError:
+            pass
 
 
 def load_config() -> dict:
@@ -295,6 +301,12 @@ def save_config(cfg: dict) -> None:
     ensure_dirs()
     path = config_file()
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # 含 API Key, 收紧为仅本用户可读(POSIX; Windows 的 chmod 只影响只读位, 无害)
+    if os.name != "nt":
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
 
 
 def seed_base_image() -> Path | None:

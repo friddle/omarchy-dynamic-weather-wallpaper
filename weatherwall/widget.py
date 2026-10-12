@@ -544,19 +544,21 @@ def compose_calendar(data: bytes, ccfg: dict, now: datetime.datetime,
     img_w, img_h = _probe_size(data)
     lay = calendar_layout(img_w, img_h, ccfg, now, lang)
 
-    # 今日红心: 找得到覆盖 ♥ 的字体才画, 并把红字换行加宽单元; 否则仅红字
+    # 今日红心: 找得到覆盖 ♥ 的字体才画(数字左侧, 不挤占列宽); 否则仅红字标注
     heart_font = find_icon_font({HEART}) or (font if font_covers(font, HEART) else None)
     if heart_font:
         today = next((c for c in lay["cells"]
                       if c["color"].startswith("0xff4d5e") and c["text"] == str(now.day)), None)
         if today:
-            hx = today["x"] + today["w"] + max(2, lay["gap"] // 3)
-            if hx + lay["day_sz"] < lay["box"][0] + lay["box"][2] - lay["pad"]:
-                lay["cells"].append({"text": HEART, "x": hx,
-                                     "y": today["y"] + round(lay["day_sz"] * 0.12),
-                                     "fontsize": round(lay["day_sz"] * 0.78),
-                                     "color": "0xff4d5e@0.98", "w": 0,
-                                     "font": heart_font})
+            heart_sz = round(lay["day_sz"] * 0.62)
+            hx = today["x"] - round(heart_sz * 1.05)
+            if hx < lay["box"][0] + lay["pad"] - round(lay["pad"] * 0.8):
+                hx = today["x"]  # 兜底: 放不下就不偏移
+            lay["cells"].append({"text": HEART, "x": hx,
+                                 "y": today["y"] + round((lay["day_sz"] - heart_sz) * 0.35),
+                                 "fontsize": heart_sz,
+                                 "color": "0xff4d5e@0.98", "w": 0,
+                                 "font": heart_font})
 
     with tempfile.TemporaryDirectory(prefix="weatherwall-cal-") as td:
         tdir = Path(td)

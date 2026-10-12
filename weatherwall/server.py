@@ -21,8 +21,11 @@ API:
 
 import base64
 import datetime as dt
+import hmac
 import json
+import os
 import re
+import secrets
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +36,46 @@ from . import config, naming, region, wallpaper
 from .app import App
 from . import net
 from .weather import china_cities, fetch_weather, find_china_city, US_CITIES
+
+# 无需令牌的端点: 设置页本身、顶栏挂件用的状态接口、城市静态表和图片预览。
+# 其余(含 API 明文的 /api/config、各种变更操作)一律要求 X-Token 请求头,
+# 防止同机其他账户未授权读取密钥或改动配置。
+_OPEN_PATHS = {"/", "/index.html", "/api/status", "/api/cities",
+               "/api/wallpaper-file", "/api/base-image-file"}
+
+_TOKEN = ""
+
+
+def _auth_token() -> str:
+    """本地访问令牌: 首次启动生成, 0600 保存; 设置页由服务端注入, 无需手工配置。"""
+    global _TOKEN
+    if _TOKEN:
+        return _TOKEN
+    p = config.config_dir() / "token"
+    try:
+        t = p.read_text(encoding="utf-8").strip()
+        if t:
+            _TOKEN = t
+            return _TOKEN
+    except OSError:
+        pass
+    _TOKEN = secrets.token_urlsafe(24)
+    try:
+        config.ensure_dirs()
+        p.write_text(_TOKEN + "\n", encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(p, 0o600)
+    except OSError:
+        pass
+    return _TOKEN
+
+
+def _index_html() -> bytes:
+    """返回注入了令牌的设置页(注入到首个 <script> 之前, 页面 JS 自动携带)。"""
+    data = web_index_path().read_bytes()
+    inject = (b"<script>var APITOKEN=" + json.dumps(_auth_token()).encode() + b";</script>")
+    i = data.find(b"<script>")
+    return data[:i] + inject + data[i:] if i >= 0 else data + inject
 
 
 def web_index_path() -> Path:
@@ -130,8 +173,8 @@ def make_handler(app: App) -> type:
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return {}
 
-        def _file(self, path: Path, mime: str) -> None:
-            data = path.read_bytes()
+        def _file(self, src, mime: str) -> None:
+            data = src.read_bytes() if isinstance(src, Path) else bytes(src)
             self.send_response(200)
             self.send_header("Content-Type", mime)
             self.send_header("Content-Length", str(len(data)))
@@ -139,14 +182,21 @@ def make_handler(app: App) -> type:
             self.end_headers()
             self.wfile.write(data)
 
+        def _authed(self) -> bool:
+            tok = self.headers.get("X-Token", "")
+            want = _auth_token()
+            return bool(want) and hmac.compare_digest(tok, want)
+
         # ---- GET ----
 
         def do_GET(self):  # noqa: N802
             url = urlparse(self.path)
             qs = parse_qs(url.query)
             try:
+                if url.path not in _OPEN_PATHS and not self._authed():
+                    return self._json({"ok": False, "error": "unauthorized"}, 401)
                 if url.path in ("/", "/index.html"):
-                    self._file(web_index_path(), "text/html; charset=utf-8")
+                    self._file(_index_html(), "text/html; charset=utf-8")
                 elif url.path == "/api/cities":
                     self._json({"ok": True, "china": china_cities(), "us": US_CITIES})
                 elif url.path == "/api/status":
@@ -208,6 +258,8 @@ def make_handler(app: App) -> type:
             url = urlparse(self.path)
             body = self._body()
             try:
+                if not self._authed():
+                    return self._json({"ok": False, "error": "unauthorized"}, 401)
                 if url.path == "/api/config":
                     cfg = config.load_config()
                     incoming = body.get("config")
